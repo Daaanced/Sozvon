@@ -1,7 +1,0 @@
-double f_function(double r, double t) { return  exp(t); } // значение функции правой части в заданной точке
-
-double u_function(double r, double t) { return exp(t); } // аналитическое значение функции
-
-double du_function(double r, double t) { return   0; } // производная аналитического значения функции
-
-double ubeta_function(double r, double t) { return r * t + pow(r, 2) * t; } // функция ubeta для третьих краевых
