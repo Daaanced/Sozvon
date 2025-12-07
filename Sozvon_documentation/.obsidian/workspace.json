@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "46b196d68500d486",
+        "id": "543ad967c64bceae",
         "type": "tabs",
         "children": [
           {
-            "id": "162725859d8cb7df",
+            "id": "c0980fab749fc954",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "Sozvon/UX-UI спецификация.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "Новая вкладка"
+              "title": "UX-UI спецификация"
             }
           }
         ]
@@ -177,10 +181,19 @@
       "bases:Создать новую базу": false
     }
   },
-  "active": "a454d9a85f08c91e",
+  "active": "c0980fab749fc954",
   "lastOpenFiles": [
-    "Без названия",
+    "Sozvon/Мои мысли.md",
+    "Sozvon/Client спецификация.md",
+    "Sozvon/Server спецификация.md",
+    "Sozvon/UX-UI спецификация.md",
+    "Sozvon/images/Pasted image 20251207181841.png",
+    "Sozvon/images/Pasted image 20251207164552.png",
+    "Sozvon/images/Pasted image 20251207181728.png",
+    "Sozvon/images",
     "2025-12-07.md",
+    "Без названия.canvas",
+    "Без названия",
     "Без названия.base"
   ]
 }
