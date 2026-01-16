@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Sozvon/UX-UI спецификация.md",
+                "file": "Sozvon/Мои мысли.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "UX-UI спецификация"
+              "title": "Мои мысли"
             }
           }
         ]
@@ -183,10 +183,10 @@
   },
   "active": "c0980fab749fc954",
   "lastOpenFiles": [
+    "Sozvon/UX-UI спецификация.md",
     "Sozvon/Мои мысли.md",
     "Sozvon/Client спецификация.md",
     "Sozvon/Server спецификация.md",
-    "Sozvon/UX-UI спецификация.md",
     "Sozvon/images/Pasted image 20251207181841.png",
     "Sozvon/images/Pasted image 20251207164552.png",
     "Sozvon/images/Pasted image 20251207181728.png",
