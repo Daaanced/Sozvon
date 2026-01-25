@@ -1,3 +1,4 @@
+// User_Service\main.go
 package main
 
 import (
@@ -14,6 +15,11 @@ func main() {
 	db.Init()
 
 	r := mux.NewRouter()
+
+	r.PathPrefix("/static/").
+		Handler(http.StripPrefix("/static/",
+			http.FileServer(http.Dir("./static")),
+		))
 
 	r.HandleFunc("/users", handlers.GetUsers).Methods("GET")
 	r.HandleFunc("/users/{login}", handlers.GetUser).Methods("GET")

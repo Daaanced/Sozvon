@@ -1,9 +1,10 @@
+// User_Service\models\user.go
 package models
 
 type User struct {
-	Login   string `json:"login"` // идентификатор, совпадает с Auth Service
+	Login   string `json:"login"`
 	Name    string `json:"name"`
 	Email   string `json:"email"`
-	Age     int    `json:"age"`
-	Address string `json:"address"`
+	Info    string `json:"info"`
+	Picture string `json:"picture"`
 }

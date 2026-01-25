@@ -1,3 +1,4 @@
+// User_Service\db\db.go
 package db
 
 import (
@@ -19,6 +20,10 @@ const (
 	password = ""       // пароль к PostgreSQL
 	dbname   = "userdb" // отдельная БД для User Service
 )
+
+const BackendURL = "http://localhost:8080"
+const AvatarsPath = "/static/avatars/"
+const DefaultAvatar = "default.png"
 
 func Init() {
 	psqlInfo := fmt.Sprintf(
@@ -42,7 +47,7 @@ func Init() {
 // CRUD операции
 
 func GetAllUsers() ([]models.User, error) {
-	rows, err := DB.Query("SELECT login, name, email, age, address FROM users")
+	rows, err := DB.Query("SELECT login, name, email, info, picture FROM users")
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +56,7 @@ func GetAllUsers() ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.Login, &u.Name, &u.Email, &u.Age, &u.Address); err != nil {
+		if err := rows.Scan(&u.Login, &u.Name, &u.Email, &u.Info, &u.Picture); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -62,17 +67,25 @@ func GetAllUsers() ([]models.User, error) {
 
 func GetUserByLogin(login string) (models.User, error) {
 	var u models.User
+
 	err := DB.QueryRow(
-		"SELECT login, name, email, age, address FROM users WHERE login=$1",
+		"SELECT login, name, email, info, picture FROM users WHERE login=$1",
 		login,
-	).Scan(&u.Login, &u.Name, &u.Email, &u.Age, &u.Address)
-	return u, err
+	).Scan(&u.Login, &u.Name, &u.Email, &u.Info, &u.Picture)
+
+	if err != nil {
+		return u, err
+	}
+
+	fillAvatar(&u)
+
+	return u, nil
 }
 
 func CreateUser(u models.User) error {
 	_, err := DB.Exec(
-		"INSERT INTO users (login, name, email, age, address) VALUES ($1,$2,$3,$4,$5)",
-		u.Login, u.Name, u.Email, u.Age, u.Address,
+		"INSERT INTO users (login, name, email, info, picture) VALUES ($1,$2,$3,$4,$5)",
+		u.Login, u.Name, u.Email, u.Info, u.Picture,
 	)
 	return err
 }
@@ -84,8 +97,17 @@ func DeleteUser(login string) error {
 
 func UpdateUser(u models.User) error {
 	_, err := DB.Exec(
-		"UPDATE users SET name=$1, email=$2, age=$3, address=$4 WHERE login=$5",
-		u.Name, u.Email, u.Age, u.Address, u.Login,
+		"UPDATE users SET name=$1, email=$2, info=$3, picture=$4 WHERE login=$5",
+		u.Name, u.Email, u.Info, u.Picture, u.Login,
 	)
 	return err
+}
+
+func fillAvatar(u *models.User) {
+
+	if u.Picture == "" {
+		u.Picture = BackendURL + AvatarsPath + DefaultAvatar
+	} else {
+		u.Picture = BackendURL + AvatarsPath + u.Picture
+	}
 }

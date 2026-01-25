@@ -1,3 +1,4 @@
+// Gateway\handlers\gateway.go
 package handlers
 
 import (
@@ -14,7 +15,7 @@ const (
 )
 
 // Прокси-запрос к другому сервису
-func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
+func ProxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 	req, err := http.NewRequest(r.Method, targetURL+r.RequestURI, r.Body)
 	if err != nil {
 		http.Error(w, "cannot create request", 500)
@@ -49,7 +50,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 func RegisterRoutes(r *mux.Router) {
 	// Auth Service
 	r.PathPrefix("/auth/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		proxyRequest(w, r, AuthServiceURL)
+		ProxyRequest(w, r, AuthServiceURL)
 	})
 
 	// User Service (требует токен JWT)
@@ -58,6 +59,6 @@ func RegisterRoutes(r *mux.Router) {
 		// token := r.Header.Get("Authorization")
 		// validateToken(token)
 
-		proxyRequest(w, r, UserServiceURL)
+		ProxyRequest(w, r, UserServiceURL)
 	})
 }

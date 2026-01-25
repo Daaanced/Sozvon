@@ -1,3 +1,4 @@
+// Authorization\auth\auth.go
 package auth
 
 import (

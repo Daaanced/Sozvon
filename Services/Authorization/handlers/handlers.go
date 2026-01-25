@@ -1,3 +1,4 @@
+// Authorization/handlers/handlers.go
 package handlers
 
 import (
@@ -27,14 +28,27 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := models.User{Login: req.Login, Password: hash}
+	user := models.User{
+		Login:    req.Login,
+		Password: hash,
+	}
+
 	if err := db.CreateUser(user); err != nil {
 		http.Error(w, "user exists or DB error", 500)
 		return
 	}
 
-	w.WriteHeader(201)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	// 🔥 ВАЖНОЕ ДОБАВЛЕНИЕ
+	if err := createUserProfile(req.Login); err != nil {
+		// ⚠️ В идеале — откатить auth user, но для MVP логируем
+		http.Error(w, "cannot create user profile", 500)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+	})
 }
 
 // POST /login

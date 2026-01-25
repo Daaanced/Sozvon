@@ -1,3 +1,4 @@
+// Gateway\main.go
 package main
 
 import (
@@ -12,6 +13,10 @@ import (
 func main() {
 	r := mux.NewRouter()
 	handlers.RegisterRoutes(r)
+
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/",
+		http.FileServer(http.Dir("../Services/User_Service/static/")),
+	))
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
