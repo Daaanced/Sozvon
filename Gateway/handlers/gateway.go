@@ -22,7 +22,7 @@ func ProxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 		return
 	}
 
-	// Передаем заголовки клиента
+	// копируем headers клиента
 	for name, values := range r.Header {
 		for _, value := range values {
 			req.Header.Add(name, value)
@@ -37,12 +37,14 @@ func ProxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 	}
 	defer resp.Body.Close()
 
-	// Копируем заголовки и статус
-	for k, v := range resp.Header {
-		w.Header()[k] = v
+	// 🔥 КОПИРУЕМ ВСЕ HEADERS ОТ СЕРВИСА
+	for name, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
 	}
-	w.WriteHeader(resp.StatusCode)
 
+	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
 }
 
@@ -55,10 +57,7 @@ func RegisterRoutes(r *mux.Router) {
 
 	// User Service (требует токен JWT)
 	r.PathPrefix("/users/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Можно проверять JWT здесь
-		// token := r.Header.Get("Authorization")
-		// validateToken(token)
-
 		ProxyRequest(w, r, UserServiceURL)
 	})
+
 }
