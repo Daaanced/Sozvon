@@ -13,4 +13,3 @@ export interface User {
 export function searchUser(login: string): Promise<User> {
   return request(`/users/${encodeURIComponent(login)}`)
 }
-

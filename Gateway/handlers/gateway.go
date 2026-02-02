@@ -12,6 +12,7 @@ import (
 const (
 	AuthServiceURL = "http://localhost:8082"
 	UserServiceURL = "http://localhost:8083"
+	ChatServiceURL = "http://localhost:8084"
 )
 
 // Прокси-запрос к другому сервису
@@ -22,7 +23,7 @@ func ProxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 		return
 	}
 
-	// копируем headers клиента
+	// Передаем заголовки клиента
 	for name, values := range r.Header {
 		for _, value := range values {
 			req.Header.Add(name, value)
@@ -37,14 +38,12 @@ func ProxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 	}
 	defer resp.Body.Close()
 
-	// 🔥 КОПИРУЕМ ВСЕ HEADERS ОТ СЕРВИСА
-	for name, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(name, value)
-		}
+	// Копируем заголовки и статус
+	for k, v := range resp.Header {
+		w.Header()[k] = v
 	}
-
 	w.WriteHeader(resp.StatusCode)
+
 	io.Copy(w, resp.Body)
 }
 
@@ -55,9 +54,16 @@ func RegisterRoutes(r *mux.Router) {
 		ProxyRequest(w, r, AuthServiceURL)
 	})
 
-	// User Service (требует токен JWT)
+	// User Service
 	r.PathPrefix("/users/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ProxyRequest(w, r, UserServiceURL)
 	})
 
+	// Chat Service
+	r.PathPrefix("/chats/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ProxyRequest(w, r, ChatServiceURL)
+	})
+
+	// 🔥 WebSocket
+	r.HandleFunc("/ws", WebSocketHandler)
 }

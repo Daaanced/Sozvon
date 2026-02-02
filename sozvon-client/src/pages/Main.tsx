@@ -2,12 +2,16 @@
 import { useState } from 'react'
 import { searchUser } from '../api/users'
 import UserSearchResult from '../components/UserSearchResult'
+import { useNavigate } from 'react-router-dom'
+
 
 export default function Main() {
   const [query, setQuery] = useState('')
   const [user, setUser] = useState<any>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+
 
   async function handleSearch() {
     if (!query) return
@@ -52,10 +56,10 @@ export default function Main() {
 
       {user && (
         <UserSearchResult
-  		login={user.login}
-  		picture={user.picture}
-  		onChat={() => console.log('Start chat with', user.login)}
-  		onCall={() => console.log('Start call with', user.login)}
+  			login={user.login}
+  			picture={user.picture}
+  			onChat={() => navigate(`/chat/${user.login}`)}
+  			onCall={() => console.log('Start call with', user.login)}
 />
       )}
     </div>
