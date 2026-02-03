@@ -1,34 +1,42 @@
-//sozvon-client\src\components\Chat.tsx
+// sozvon-client/src/components/Chat.tsx
+
 import { useEffect, useState } from 'react'
-import { connectChat, sendMessage, disconnectChat } from '../services/chat'
+import { onWSMessage, sendWS } from '../services/ws'
 
 type Props = {
   chatId: string
-  token: string
 }
 
-export default function Chat({ chatId, token }: Props) {
+export default function Chat({ chatId }: Props) {
   const [messages, setMessages] = useState<any[]>([])
   const [text, setText] = useState('')
 
   useEffect(() => {
-  connectChat(token, (msg) => {
-    console.log("Received WS message:", msg)
-    console.log("Current chatId:", chatId)
+    const off = onWSMessage(msg => {
+      if (msg.event === 'message:new' && msg.data.chatId === chatId) {
+        setMessages(prev => [
+          ...prev,
+          { from: msg.data.from, text: msg.data.text }
+        ])
+      }
+    })
 
-    // добавляем свои и чужие сообщения
-    if (msg.event === 'message:new' && msg.data.chatId === chatId) {
-      setMessages(prev => [...prev, {
-        from: msg.data.from,
-        text: msg.data.text
-      }])
-    }
-  })
+    return off
+  }, [chatId])
 
-  return () => {
-    disconnectChat()
+  function send() {
+    if (!text.trim()) return
+
+    sendWS({
+      event: 'message:send',
+      data: {
+        chatId,
+        text
+      }
+    })
+
+    setText('')
   }
-}, [token, chatId])
 
   return (
     <div>
@@ -40,15 +48,11 @@ export default function Chat({ chatId, token }: Props) {
 
       <input
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            sendMessage(chatId, text)
-            setText('')
-          }
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') send()
         }}
       />
     </div>
   )
 }
-

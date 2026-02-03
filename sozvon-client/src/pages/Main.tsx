@@ -1,9 +1,9 @@
-//sozvon-client\src\pages\Main.tsx
+// sozvon-client/src/pages/Main.tsx
 import { useState } from 'react'
 import { searchUser } from '../api/users'
 import UserSearchResult from '../components/UserSearchResult'
 import { useNavigate } from 'react-router-dom'
-
+import { parseToken } from '../functions/parse'
 
 export default function Main() {
   const [query, setQuery] = useState('')
@@ -11,7 +11,6 @@ export default function Main() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-
 
   async function handleSearch() {
     if (!query) return
@@ -30,39 +29,54 @@ export default function Main() {
     }
   }
 
+  async function handleChat(userLogin: string) {
+    try {
+      const token = localStorage.getItem('token')!
+      const loginFromToken = parseToken(token)
+
+      const res = await fetch('http://90.189.252.24:8080/chats/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          from: loginFromToken,
+          to: userLogin
+        })
+      })
+
+      const chat = await res.json()
+      navigate(`/app/chat/${chat.id}`)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   return (
-    <div
-      style={{
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: 20
-      }}
-    >
-      {/* Search input */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input
-          placeholder="Search user by login"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-        />
-        <button onClick={handleSearch}>Search</button>
-      </div>
+    <div>
+      <h3>Search user</h3>
+
+      <input
+        placeholder="Login"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+      />
+
+      <button onClick={handleSearch}>Search</button>
 
       {loading && <p>Searching...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {user && (
         <UserSearchResult
-  			login={user.login}
-  			picture={user.picture}
-  			onChat={() => navigate(`/chat/${user.login}`)}
-  			onCall={() => console.log('Start call with', user.login)}
-/>
+          login={user.login}
+          picture={user.picture}
+          onChat={() => handleChat(user.login)}
+          onCall={() => console.log('Call', user.login)}
+        />
       )}
     </div>
   )
 }
-

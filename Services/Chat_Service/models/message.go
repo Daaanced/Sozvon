@@ -1,3 +1,4 @@
+// Chat_Service\models\message.go
 package models
 
 type Message struct {

@@ -34,6 +34,7 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 	chat := models.Chat{
 		ID:      chatID,
 		Members: []string{req.From, req.To},
+		Active:  false,
 	}
 
 	chatID, exists := FindChat(req.From, req.To)
@@ -43,6 +44,7 @@ func CreateChat(w http.ResponseWriter, r *http.Request) {
 		storage.Chats[chatID] = models.Chat{
 			ID:      chatID,
 			Members: []string{req.From, req.To},
+			Active:  false,
 		}
 		storage.Mu.Unlock()
 		log.Printf("chat created: id=%s members=[%s %s]", chatID, req.From, req.To)

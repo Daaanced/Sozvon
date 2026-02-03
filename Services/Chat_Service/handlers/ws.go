@@ -1,5 +1,4 @@
-//Chat_Service\handlers\ws.go
-
+// Chat_Service\handlers\ws.go
 package handlers
 
 import (
@@ -15,8 +14,10 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-var clients = make(map[string]*websocket.Conn)
-var mu sync.Mutex
+var (
+	clients = make(map[string]*websocket.Conn)
+	mu      sync.Mutex
+)
 
 type WSMessage struct {
 	Event string `json:"event"`
@@ -39,7 +40,7 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// регистрируем клиента
+	// register client
 	mu.Lock()
 	clients[login] = conn
 	mu.Unlock()
@@ -59,83 +60,68 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Printf("WS message from %s: %+v\n", login, msg)
+		if msg.Event != "message:send" {
+			continue
+		}
 
-		// 1️⃣ найти чат
+		// 1️⃣ load chat
 		storage.Mu.Lock()
 		chat, ok := storage.Chats[msg.Data.ChatID]
-		storage.Mu.Unlock()
-
 		if !ok {
+			storage.Mu.Unlock()
 			log.Println("chat not found:", msg.Data.ChatID)
 			continue
 		}
 
-		// 2️⃣ отправить всем участникам (кроме отправителя)
+		// 2️⃣ activate chat ONCE (first message)
+		justActivated := false
+		if !chat.Active {
+			chat.Active = true
+			storage.Chats[msg.Data.ChatID] = chat
+			justActivated = true
+		}
+		storage.Mu.Unlock()
+
+		// 3️⃣ notify second participant ONLY ONCE
+		if justActivated {
+			for _, member := range chat.Members {
+				mu.Lock()
+				conn, ok := clients[member]
+				mu.Unlock()
+
+				if !ok {
+					continue
+				}
+
+				conn.WriteJSON(map[string]interface{}{
+					"event": "chat:created",
+					"data": map[string]interface{}{
+						"chatId":  chat.ID,
+						"members": chat.Members,
+					},
+				})
+
+				log.Printf("chat:created sent to %s (chat=%s)", member, chat.ID)
+			}
+		}
+
+		// 4️⃣ deliver message to all online members
 		for _, member := range chat.Members {
 			mu.Lock()
 			receiver, ok := clients[member]
 			mu.Unlock()
 			if !ok {
-				log.Printf("receiver offline: %s\n", member)
 				continue
 			}
 
-			err := receiver.WriteJSON(map[string]interface{}{
+			receiver.WriteJSON(map[string]interface{}{
 				"event": "message:new",
 				"data": map[string]string{
-					"chatId": msg.Data.ChatID,
+					"chatId": chat.ID,
 					"from":   login,
 					"text":   msg.Data.Text,
 				},
 			})
-
-			if err != nil {
-				log.Println("send error to", member, err)
-			} else {
-				log.Printf("sending message to %s: chatId=%s, text=%s", member, msg.Data.ChatID, msg.Data.Text)
-			}
-		}
-
-	}
-}
-
-func handleSendMessage(sender string, msg WSMessage) {
-	chatID := msg.Data.ChatID
-	text := msg.Data.Text
-
-	// 1️⃣ найти чат
-	storage.Mu.Lock()
-	chat, ok := storage.Chats[chatID]
-	storage.Mu.Unlock()
-
-	if !ok {
-		log.Println("chat not found:", chatID)
-		return
-	}
-
-	// 2️⃣ найти получателя
-	var receiverLogin string
-	for _, m := range chat.Members {
-		if m != sender {
-			receiverLogin = m
 		}
 	}
-
-	// 3️⃣ найти websocket получателя
-	mu.Lock()
-	receiverConn, ok := clients[receiverLogin]
-	mu.Unlock()
-
-	if !ok {
-		log.Println("receiver offline:", receiverLogin)
-		return
-	}
-
-	// 4️⃣ отправить сообщение
-	receiverConn.WriteJSON(map[string]string{
-		"from":   sender,
-		"text":   text,
-		"chatId": chatID,
-	})
 }

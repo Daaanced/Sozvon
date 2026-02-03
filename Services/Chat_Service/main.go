@@ -11,6 +11,7 @@ import (
 func main() {
 	http.HandleFunc("/ws", handlers.HandleWS)
 	http.HandleFunc("/chats/create", handlers.CreateChat)
+	http.HandleFunc("/chats", handlers.GetChats)
 
 	log.Println("Chat Service running on :8084")
 	log.Fatal(http.ListenAndServe(":8084", nil))
