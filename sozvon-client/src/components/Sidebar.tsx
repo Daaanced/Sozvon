@@ -1,9 +1,9 @@
 // sozvon-client/src/components/Sidebar.tsx
-
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { onWSMessage } from '../services/ws'
 import { parseToken } from '../functions/parse'
+import { searchUser, User } from '../api/users'
 
 type Chat = {
   chatId: string
@@ -14,96 +14,185 @@ export default function Sidebar() {
   const token = localStorage.getItem('token')!
   const myLogin = parseToken(token)!
   const navigate = useNavigate()
-  const [chats, setChats] = useState<Chat[]>([])
+  const location = useLocation()
 
-  function addChat(chat: Chat) {
-    setChats(prev =>
-      prev.find(c => c.chatId === chat.chatId)
-        ? prev
-        : [...prev, chat]
-    )
+  const [chats, setChats] = useState<Chat[]>([])
+  const [users, setUsers] = useState<Record<string, User>>({})
+  const [me, setMe] = useState<User | null>(null)
+
+  async function loadChats() {
+    const res = await fetch('http://176.51.121.88:8080/chats', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+
+    if (!res.ok) throw new Error(await res.text())
+
+    const data: Chat[] = await res.json()
+    setChats(Array.isArray(data) ? data : [])
+
+    data.forEach(async chat => {
+      const withLogin = chat.members.find(m => m !== myLogin)
+      if (withLogin && !users[withLogin]) {
+        const u = await searchUser(withLogin)
+        setUsers(prev => ({ ...prev, [withLogin]: u }))
+      }
+    })
   }
 
   useEffect(() => {
-    const off = onWSMessage(msg => {
-      if (msg.event === 'chat:created') {
-        addChat({
-          chatId: msg.data.chatId,
-          members: msg.data.members
-        })
-      }
+    loadChats()
+    searchUser(myLogin).then(setMe)
 
-    //   if (msg.event === 'message:new') {
-    //     addChat({
-    //       chatId: msg.data.chatId,
-    //       login: msg.data.from
-    //     })
-    //   }
+    const off = onWSMessage(msg => {
+      if (msg.event === 'chat:created' || msg.event === 'message:new') {
+        loadChats()
+      }
     })
 
     return off
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Guild list */}
-      <div>
-        <h4>Guilds</h4>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={guildStyle}>G1</div>
-          <div style={guildStyle}>G2</div>
-          <div style={guildStyle}>+</div>
-        </div>
+    <div style={styles.sidebar}>
+      {/* 🔍 SEARCH USERS */}
+      <div
+        style={styles.searchButton}
+        onClick={() => navigate('/app')}
+      >
+        🔍 Search users
       </div>
 
-      {/* Navigation */}
-      <div>
-        <button onClick={() => navigate('/app')}>
-          Search user
-        </button>
-
-        <button disabled style={{ marginLeft: 8 }}>
-          Friends
-        </button>
-      </div>
-
-      {/* Direct messages */}
-      <div>
-        <h4>Direct Messages</h4>
-
+      {/* 💬 CHATS */}
+      <div style={styles.chatList}>
         {chats.map(chat => {
-  const withLogin = chat.members.find(m => m !== myLogin)
+          const withLogin = chat.members.find(m => m !== myLogin)!
+          const user = users[withLogin]
+          const isActive = location.pathname.endsWith(chat.chatId)
 
-		return (
-			<div
-			key={chat.chatId}
-			style={dmStyle}
-			onClick={() => navigate(`/app/chat/${chat.chatId}`)}
-			>
-			{withLogin}
-			</div>
-		)
-		})}
+          return (
+            <div
+              key={chat.chatId}
+              onClick={() => navigate(`/app/chats/${chat.chatId}`)}
+              style={{
+                ...styles.chatItem,
+                background: isActive ? '#e0e0ff' : '#fff',
+              }}
+            >
+              <div style={styles.avatar}>
+                {user?.picture
+                  ? <img src={user.picture} style={styles.avatarImg} />
+                  : <span>{withLogin[0].toUpperCase()}</span>
+                }
+              </div>
+              <span>{user?.name || withLogin}</span>
+            </div>
+          )
+        })}
+      </div>
 
+      {/* 👤 CURRENT USER */}
+      <div style={styles.meBlock}>
+        <div style={styles.meInfo}>
+          <div style={styles.avatar}>
+            {me?.picture
+              ? <img src={me.picture} style={styles.avatarImg} />
+              : <span>{myLogin[0].toUpperCase()}</span>
+            }
+          </div>
+          <span>{myLogin}</span>
+        </div>
+
+        <div style={styles.meButtons}>
+          <button style={styles.iconBtn}>⚙️</button>
+          <button style={styles.iconBtn}>⭐</button>
+          <button style={styles.iconBtn}>🚪</button>
+        </div>
       </div>
     </div>
   )
 }
 
-const guildStyle = {
-  width: 40,
-  height: 40,
-  borderRadius: '50%',
-  background: '#ddd',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer'
-}
+const styles = {
+  sidebar: {
+    width: 260,
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    borderRight: '1px solid #ddd',
+    background: '#f9f9f9',
+    padding: 8,
+    boxSizing: 'border-box' as const,
+  },
 
-const dmStyle = {
-  padding: 8,
-  borderRadius: 6,
-  cursor: 'pointer',
-  background: '#f3f3f3'
+  searchButton: {
+    padding: '8px 10px',
+    borderRadius: 6,
+    background: '#fff',
+    cursor: 'pointer',
+    marginBottom: 8,
+    textAlign: 'center' as const,
+    fontWeight: 500,
+  },
+
+  chatList: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 6,
+    overflowY: 'auto' as const,
+  },
+
+  chatItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '6px 8px',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    background: '#ddd',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover' as const,
+  },
+
+  meBlock: {
+    borderTop: '1px solid #ddd',
+    paddingTop: 8,
+    marginTop: 8,
+  },
+
+  meInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+
+  meButtons: {
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
+
+  iconBtn: {
+    flex: 1,
+    margin: 2,
+    padding: 6,
+    borderRadius: 6,
+    border: 'none',
+    cursor: 'pointer',
+  },
 }

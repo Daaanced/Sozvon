@@ -1,5 +1,7 @@
 // sozvon-client/src/services/ws.ts
 
+//import { parseToken } from '../functions/parse'
+
 let socket: WebSocket | null = null
 let listeners: ((msg: any) => void)[] = []
 let isOpen = false
@@ -7,25 +9,25 @@ let isOpen = false
 export function connectWS(token: string) {
   if (socket) return
 
-  socket = new WebSocket(`ws://90.189.252.24:8080/ws?token=${token}`)
+  socket = new WebSocket(`ws://176.51.121.88:8080/ws?token=${token}`)
 
   socket.onopen = () => {
-    isOpen = true
-    console.log('[WS] connected')
-  }
+  console.log('[WS] connected')
+  isOpen = true
+}
+
+socket.onclose = () => {
+  isOpen = false
+  socket = null
+}
+
 
   socket.onmessage = (e) => {
-    console.log('[WS] raw message:', e.data)
     const msg = JSON.parse(e.data)
     listeners.forEach(fn => fn(msg))
   }
-
-  socket.onclose = () => {
-    socket = null
-    isOpen = false
-    listeners = []
-  }
 }
+
 
 export function onWSMessage(fn: (msg: any) => void) {
   listeners.push(fn)

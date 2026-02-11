@@ -6,6 +6,8 @@
 	1.2. User_Service
 		>Run user_service.exe
 
+	1.3. Chat_Service
+		>Run chat_service.exe
 2. DBs
 	
 	2.1. authdb
@@ -19,3 +21,7 @@
 
 4. sozvon-client
 	>Enter npm run dev
+
+	Temporary:
+	>npm run build
+	>serve -s dist

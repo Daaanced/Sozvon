@@ -2,11 +2,12 @@
 package handlers
 
 import (
-	"Chat_Service/storage"
+	"Chat_Service/db"
 	"log"
 	"net/http"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -28,22 +29,22 @@ type WSMessage struct {
 }
 
 func HandleWS(w http.ResponseWriter, r *http.Request) {
+	// ⚠️ ВАЖНО: login, а не token
 	login := r.URL.Query().Get("login")
 	if login == "" {
-		http.Error(w, "login required", http.StatusBadRequest)
+		http.Error(w, "login required", 400)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("upgrade error:", err)
 		return
 	}
 
-	// register client
 	mu.Lock()
 	clients[login] = conn
 	mu.Unlock()
+
 	log.Println("WS connected:", login)
 
 	defer func() {
@@ -64,64 +65,79 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// 1️⃣ load chat
-		storage.Mu.Lock()
-		chat, ok := storage.Chats[msg.Data.ChatID]
-		if !ok {
-			storage.Mu.Unlock()
-			log.Println("chat not found:", msg.Data.ChatID)
+		// 1️⃣ получаем участников чата
+		rows, err := db.DB.Query(`
+			SELECT login FROM chat_members WHERE chat_id = $1
+		`, msg.Data.ChatID)
+		if err != nil {
 			continue
 		}
 
-		// 2️⃣ activate chat ONCE (first message)
-		justActivated := false
-		if !chat.Active {
-			chat.Active = true
-			storage.Chats[msg.Data.ChatID] = chat
-			justActivated = true
+		var members []string
+		for rows.Next() {
+			var m string
+			rows.Scan(&m)
+			members = append(members, m)
 		}
-		storage.Mu.Unlock()
+		rows.Close()
 
-		// 3️⃣ notify second participant ONLY ONCE
-		if justActivated {
-			for _, member := range chat.Members {
+		if len(members) == 0 {
+			continue
+		}
+
+		// 2️⃣ сохраняем сообщение
+		_, err = db.DB.Exec(`
+			INSERT INTO messages (id, chat_id, sender_login, text)
+			VALUES ($1, $2, $3, $4)
+		`, uuid.NewString(), msg.Data.ChatID, login, msg.Data.Text)
+
+		if err != nil {
+			log.Println("insert message error:", err)
+			continue
+		}
+
+		// 3️⃣ АКТИВАЦИЯ ЧАТА (ОДИН РАЗ)
+		var justActivated bool
+		err = db.DB.QueryRow(`
+			UPDATE chats
+			SET active = true
+			WHERE id = $1 AND active = false
+			RETURNING true
+		`, msg.Data.ChatID).Scan(&justActivated)
+
+		if err == nil && justActivated {
+			for _, member := range members {
 				mu.Lock()
-				conn, ok := clients[member]
+				c, ok := clients[member]
 				mu.Unlock()
 
-				if !ok {
-					continue
+				if ok {
+					c.WriteJSON(map[string]interface{}{
+						"event": "chat:created",
+						"data": map[string]string{
+							"chatId": msg.Data.ChatID,
+						},
+					})
 				}
-
-				conn.WriteJSON(map[string]interface{}{
-					"event": "chat:created",
-					"data": map[string]interface{}{
-						"chatId":  chat.ID,
-						"members": chat.Members,
-					},
-				})
-
-				log.Printf("chat:created sent to %s (chat=%s)", member, chat.ID)
 			}
 		}
 
-		// 4️⃣ deliver message to all online members
-		for _, member := range chat.Members {
+		// 4️⃣ доставляем сообщение
+		for _, member := range members {
 			mu.Lock()
-			receiver, ok := clients[member]
+			c, ok := clients[member]
 			mu.Unlock()
-			if !ok {
-				continue
-			}
 
-			receiver.WriteJSON(map[string]interface{}{
-				"event": "message:new",
-				"data": map[string]string{
-					"chatId": chat.ID,
-					"from":   login,
-					"text":   msg.Data.Text,
-				},
-			})
+			if ok {
+				c.WriteJSON(map[string]interface{}{
+					"event": "message:new",
+					"data": map[string]string{
+						"chatId": msg.Data.ChatID,
+						"from":   login,
+						"text":   msg.Data.Text,
+					},
+				})
+			}
 		}
 	}
 }

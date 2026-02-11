@@ -1,7 +1,6 @@
 //sozvon-client\src\api\users.ts
 import { request } from './http'
 
-// src/api/users.ts
 export interface User {
   login: string
   name: string

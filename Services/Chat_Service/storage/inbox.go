@@ -1,10 +1,10 @@
 // Chat_Service\storage\inbox.go
-package storage
+// // package storage
 
-import "sync"
+// // import "sync"
 
-// user_login -> []chatID
-var (
-	UserInboxes = make(map[string][]string)
-	InboxMu     sync.Mutex
-)
+// // // user_login -> []chatID
+// // var (
+// // 	UserInboxes = make(map[string][]string)
+// // 	InboxMu     sync.Mutex
+// // )

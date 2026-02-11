@@ -21,7 +21,7 @@ const (
 	dbname   = "userdb" // отдельная БД для User Service
 )
 
-const BackendURL = "http://90.189.252.24:8080"
+const BackendURL = "http://176.51.121.88:8080"
 const AvatarsPath = "/static/avatars/"
 const DefaultAvatar = "default.png"
 

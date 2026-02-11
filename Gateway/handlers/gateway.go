@@ -60,7 +60,7 @@ func RegisterRoutes(r *mux.Router) {
 	})
 
 	// Chat Service
-	r.PathPrefix("/chats/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.PathPrefix("/chats").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ProxyRequest(w, r, ChatServiceURL)
 	})
 

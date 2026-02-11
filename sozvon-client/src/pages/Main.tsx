@@ -34,11 +34,11 @@ export default function Main() {
       const token = localStorage.getItem('token')!
       const loginFromToken = parseToken(token)
 
-      const res = await fetch('http://90.189.252.24:8080/chats/create', {
+      const res = await fetch('http://176.51.121.88:8080/chats/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: loginFromToken!
         },
         body: JSON.stringify({
           from: loginFromToken,
@@ -47,7 +47,9 @@ export default function Main() {
       })
 
       const chat = await res.json()
-      navigate(`/app/chat/${chat.id}`)
+
+		navigate(`/app/chats/${chat.id}`)
+
     } catch (err) {
       console.error(err)
     }
