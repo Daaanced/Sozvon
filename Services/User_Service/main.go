@@ -1,32 +1,103 @@
-// User_Service\main.go
+// User_Service/main.go
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"User_Service/config"
 	"User_Service/db"
 	"User_Service/handlers"
+	"User_Service/middleware"
 
 	"github.com/gorilla/mux"
 )
 
 func main() {
-	db.Init()
+	// Загрузка конфигурации
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 
+	// Инициализация БД
+	database, err := db.NewDatabase(cfg.Database)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer database.Close()
+
+	// Миграции
+	if err := database.Migrate(); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	// Создание обработчиков
+	userHandler := handlers.NewUserHandler(cfg, database)
+
+	// Создание роутера
 	r := mux.NewRouter()
 
-	r.PathPrefix("/static/").
-		Handler(http.StripPrefix("/static/",
-			http.FileServer(http.Dir("./static")),
-		))
+	// Middleware
+	r.Use(middleware.Logging)
+	r.Use(middleware.Recovery)
+	//r.Use(middleware.CORS(cfg.CORS))
 
-	r.HandleFunc("/users", handlers.GetUsers).Methods("GET")
-	r.HandleFunc("/users/{login}", handlers.GetUser).Methods("GET")
-	r.HandleFunc("/users", handlers.CreateUser).Methods("POST")
-	r.HandleFunc("/users/{login}", handlers.UpdateUser).Methods("PUT")
-	r.HandleFunc("/users/{login}", handlers.DeleteUser).Methods("DELETE")
+	// Статические файлы
+	staticPath := cfg.Static.Directory
+	r.PathPrefix("/static/").Handler(
+		http.StripPrefix("/static/",
+			http.FileServer(http.Dir(staticPath)),
+		),
+	)
 
-	log.Println("User service running on :8083")
-	log.Fatal(http.ListenAndServe(":8083", r))
+	// Регистрация маршрутов
+	userHandler.RegisterRoutes(r)
+
+	// Health check
+	r.HandleFunc("/health", healthCheck).Methods("GET")
+
+	// HTTP сервер
+	srv := &http.Server{
+		Addr:         cfg.Server.Address,
+		Handler:      r,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout:  cfg.Server.IdleTimeout,
+	}
+
+	// Запуск сервера
+	go func() {
+		log.Printf("User service starting on %s", cfg.Server.Address)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited")
+}
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok","service":"user"}`))
 }
