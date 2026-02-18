@@ -54,11 +54,19 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 
 // HandleWebSocket обрабатывает WebSocket подключения
 func (h *ChatHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Получение логина из query параметра
-	login := r.URL.Query().Get("login")
-	if login == "" {
-		http.Error(w, "Login required", http.StatusBadRequest)
-		return
+	var login string
+
+	// Получаем token из query параметра
+	token := r.URL.Query().Get("token")
+	if token != "" {
+		// Валидируем JWT
+		claims, err := h.jwtService.ValidateToken(token)
+		if err != nil {
+			log.Printf("JWT validation error: %v", err)
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+		login = claims.Login
 	}
 
 	// Upgrade до WebSocket
@@ -68,7 +76,6 @@ func (h *ChatHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Настройка соединения
 	conn.SetReadLimit(h.config.WebSocket.MaxMessageSize)
 
 	// Создание клиента

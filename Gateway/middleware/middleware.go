@@ -65,14 +65,6 @@ func Recovery(next http.Handler) http.Handler {
 	})
 }
 
-// // ✅ КРИТИЧНО для WebSocket
-// func (lrw *loggingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-// 	if hijacker, ok := lrw.ResponseWriter.(http.Hijacker); ok {
-// 		return hijacker.Hijack()
-// 	}
-// 	return nil, nil, fmt.Errorf("hijacker not supported")
-// }
-
 // ✅ Рекомендуется
 func (lrw *loggingResponseWriter) Flush() {
 	if flusher, ok := lrw.ResponseWriter.(http.Flusher); ok {
