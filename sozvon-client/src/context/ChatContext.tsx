@@ -35,8 +35,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token')
  
   if (!token) {
-  throw new Error('No token found')
-  }
+  return null
+}
+
 
   const myLogin = parseToken(token)!
   const [me, setMe] = useState<User | null>(null)
@@ -44,23 +45,30 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<Record<string, User>>({})
 
   async function loadChats() {
-    const res = await fetch('http://176.51.121.88:8080/chats', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+  const res = await fetch('http://176.51.121.88:8080/chats', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
 
-    if (!res.ok) return
-
-    const data: Chat[] = await res.json()
-    setChats(data)
-
-    data.forEach(async chat => {
-      const withLogin = chat.members.find(m => m !== myLogin)
-      if (withLogin && !users[withLogin]) {
-        const u = await searchUser(withLogin)
-        setUsers(prev => ({ ...prev, [withLogin]: u }))
-      }
-    })
+  if (!res.ok) {
+    setChats([])
+    return
   }
+
+  const data = await res.json()
+
+  // 🔐 защита от null
+  const safeChats: Chat[] = Array.isArray(data) ? data : []
+  setChats(safeChats)
+
+  safeChats.forEach(async chat => {
+    const withLogin = chat.members?.find(m => m !== myLogin)
+    if (withLogin && !users[withLogin]) {
+      const u = await searchUser(withLogin)
+      setUsers(prev => ({ ...prev, [withLogin]: u }))
+    }
+  })
+}
+
 
 useEffect(() => {
   if (!token || !myLogin) return

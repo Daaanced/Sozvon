@@ -1,10 +1,11 @@
-// Chat_Service/ws/client.go
+// Chat_Service/ws/client.go - ИСПРАВЛЕННАЯ ВЕРСИЯ
 package ws
 
 import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"Chat_Service/models"
@@ -14,12 +15,13 @@ import (
 
 // Client представляет WebSocket клиента
 type Client struct {
-	Hub    *Hub
-	Conn   *websocket.Conn
-	Login  string
-	send   chan models.WSMessage
-	ctx    context.Context
-	cancel context.CancelFunc
+	Hub       *Hub
+	Conn      *websocket.Conn
+	Login     string
+	send      chan models.WSMessage
+	ctx       context.Context
+	cancel    context.CancelFunc
+	closeOnce sync.Once // ✅ Защита от двойного закрытия
 }
 
 // NewClient создает нового WebSocket клиента
@@ -139,19 +141,23 @@ func (c *Client) SendError(code, message string) {
 
 // Close закрывает соединение клиента
 func (c *Client) Close() {
-	c.cancel()
+	// ✅ sync.Once гарантирует, что код выполнится только один раз
+	c.closeOnce.Do(func() {
+		log.Printf("Closing connection for %s", c.Login)
 
-	if c.Conn != nil {
-		c.Conn.Close()
-	}
+		// Отменяем context
+		c.cancel()
 
-	// Закрытие канала send (если еще не закрыт)
-	select {
-	case <-c.send:
-		// Уже закрыт
-	default:
+		// Закрываем WebSocket соединение
+		if c.Conn != nil {
+			c.Conn.Close()
+		}
+
+		// Закрываем канал send
 		close(c.send)
-	}
+
+		log.Printf("Connection closed for %s", c.Login)
+	})
 }
 
 // MarshalJSON для сериализации клиента (для отладки)
