@@ -1,60 +1,17 @@
 // sozvon-client/src/components/Sidebar.tsx
-import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { onWSMessage } from '../services/ws'
-import { parseToken } from '../functions/parse'
-import { searchUser, User } from '../api/users'
-
-type Chat = {
-  chatId: string
-  members: string[]
-}
+import { useChatContext } from '../context/ChatContext'
+import { useState } from 'react'
+import SettingsModal from './SettingsModal'
 
 export default function Sidebar() {
-  const token = localStorage.getItem('token')!
-  const myLogin = parseToken(token)!
+  const { chats, users, myLogin, me } = useChatContext()
+
   const navigate = useNavigate()
   const location = useLocation()
-
-  const [chats, setChats] = useState<Chat[]>([])
-  const [users, setUsers] = useState<Record<string, User>>({})
-  const [me, setMe] = useState<User | null>(null)
-
-  async function loadChats() {
-    const res = await fetch('http://176.51.121.88:8080/chats', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-
-    if (!res.ok) throw new Error(await res.text())
-
-    const data: Chat[] = await res.json()
-    setChats(Array.isArray(data) ? data : [])
-
-    data.forEach(async chat => {
-      const withLogin = chat.members.find(m => m !== myLogin)
-      if (withLogin && !users[withLogin]) {
-        const u = await searchUser(withLogin)
-        setUsers(prev => ({ ...prev, [withLogin]: u }))
-      }
-    })
-  }
-
-  useEffect(() => {
-    loadChats()
-    searchUser(myLogin).then(setMe)
-
-    const off = onWSMessage(msg => {
-      if (msg.event === 'chat:created' || msg.event === 'message:new') {
-        loadChats()
-      }
-    })
-
-    return off
-  }, [])
-
+  const [open, setOpen] = useState(false)
   return (
     <div style={styles.sidebar}>
-      {/* 🔍 SEARCH USERS */}
       <div
         style={styles.searchButton}
         onClick={() => navigate('/app')}
@@ -62,7 +19,6 @@ export default function Sidebar() {
         🔍 Search users
       </div>
 
-      {/* 💬 CHATS */}
       <div style={styles.chatList}>
         {chats.map(chat => {
           const withLogin = chat.members.find(m => m !== myLogin)!
@@ -89,26 +45,35 @@ export default function Sidebar() {
           )
         })}
       </div>
-
-      {/* 👤 CURRENT USER */}
-      <div style={styles.meBlock}>
-        <div style={styles.meInfo}>
-          <div style={styles.avatar}>
-            {me?.picture
-              ? <img src={me.picture} style={styles.avatarImg} />
-              : <span>{myLogin[0].toUpperCase()}</span>
-            }
-          </div>
-          <span>{myLogin}</span>
-        </div>
-
-        <div style={styles.meButtons}>
-          <button style={styles.iconBtn}>⚙️</button>
-          <button style={styles.iconBtn}>⭐</button>
-          <button style={styles.iconBtn}>🚪</button>
-        </div>
-      </div>
+	  <div style={styles.meBlock}>
+  <div style={styles.meInfo}>
+    <div style={styles.avatar}>
+      {me?.picture
+        ? <img src={me.picture} style={styles.avatarImg} />
+        : <span>{myLogin[0].toUpperCase()}</span>
+      }
     </div>
+    <span>{me?.name || myLogin}</span>
+  </div>
+
+  <div style={styles.meButtons}>
+    <button style={styles.iconBtn}>🎙️</button>
+    <button style={styles.iconBtn}>🎧</button>
+    <button
+  style={styles.iconBtn}
+  onClick={() => setOpen(true)}
+>
+  ⚙️
+</button>
+
+{open && (
+  <SettingsModal onClose={() => setOpen(false)} />
+)}
+  </div>
+</div>
+
+    </div>
+	
   )
 }
 

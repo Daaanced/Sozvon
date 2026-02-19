@@ -50,7 +50,7 @@ export default function Register() {
       {message && <p style={{ color: 'green' }}>{message}</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      <Link to="/">Back to login</Link>
+      <Link to="/login">Back to login</Link>
     </div>
   )
 }

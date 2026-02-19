@@ -1,35 +1,55 @@
 // sozvon-client\src\layouts\AppShell.tsx
-import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import UserInfo from '../components/UserInfo'
+import { ChatProvider } from '../context/ChatContext'
 import { connectWS } from '../services/ws'
+import { useEffect } from 'react'
 
 export default function AppShell() {
 	const token = localStorage.getItem('token')
 
-	useEffect(() => {
-  	if (token) {
-    	connectWS(token)
-  	}
-	}, [token])
-
+  	useEffect(() => {
+    if (token) {
+      connectWS(token)
+    }
+  }, [token])
+  
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      {/* LEFT — всегда */}
-      <div
-        style={{
-          width: 280,
-          borderRight: '1px solid #ddd',
-          padding: 12
-        }}
-      >
-        <Sidebar />
-      </div>
+    <ChatProvider>
+      <div style={{ display: 'flex', height: '100%' }}>
+        
+        {/* LEFT */}
+        <div style={{ width: 260, borderRight: '1px solid #ddd' }}>
+          <Sidebar />
+        </div>
 
-      {/* RIGHT — меняется */}
-      <div style={{ flex: 1, padding: 12 }}>
-        <Outlet />
+        {/* CENTER */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            padding: 12
+          }}
+        >
+          <div style={{ width: 700, height: '100%' }}>
+            <Outlet />
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div
+          style={{
+            width: 300,
+            borderLeft: '1px solid #ddd',
+            background: '#fafafa'
+          }}
+        >
+          <UserInfo />
+        </div>
+
       </div>
-    </div>
+    </ChatProvider>
   )
 }
