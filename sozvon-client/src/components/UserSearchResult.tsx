@@ -41,7 +41,7 @@ export default function UserSearchResult({ login, picture, onChat, onCall }: Pro
           }}
           onError={(e) => {
   			e.currentTarget.onerror = null
-  			e.currentTarget.src = 'http://176.51.121.88:8080/static/avatars/default.png'
+  			e.currentTarget.src = 'http://176.51.123.160:8080/static/avatars/default.png'
           }}
         />
       </div>

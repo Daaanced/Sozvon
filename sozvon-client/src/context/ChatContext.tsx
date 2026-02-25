@@ -45,7 +45,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<Record<string, User>>({})
 
   async function loadChats() {
-  const res = await fetch('http://176.51.121.88:8080/chats', {
+  const res = await fetch('http://176.51.123.160:8080/chats', {
     headers: { Authorization: `Bearer ${token}` }
   })
 

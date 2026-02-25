@@ -27,7 +27,7 @@ export default function Chat({ chatId }: Props) {
       const token = localStorage.getItem('token')
 
       const res = await fetch(
-        `http://176.51.121.88:8080/chats/${chatId}/messages`,
+        `http://176.51.123.160:8080/chats/${chatId}/messages`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
 

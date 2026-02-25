@@ -1,87 +1,82 @@
 // sozvon-client/src/components/SettingsModal.tsx
 import { useState } from "react"
-import { useChatContext } from "../context/ChatContext"
-import { updateUser, uploadAvatar } from '../api/users'
+import ProfileSettings from "./settings/ProfileSettings"
+import AppearanceSettings from "./settings/AppearanceSettings"
+import SoundSettings from "./settings/SoundSettings"
 
 type Props = {
   onClose: () => void
 }
 
+type Section = "profile" | "appearance" | "sound"
+
 export default function SettingsModal({ onClose }: Props) {
-  const { me } = useChatContext()
+  const [active, setActive] = useState<Section>("profile")
 
-  // локальное состояние для редактирования
-  const [name, setName] = useState(me?.name || "")
-  const [email, setEmail] = useState(me?.email || "")
-  const [info, setInfo] = useState(me?.info || "")
-  const [picture, setPicture] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-
- async function handleSave() {
-  if (!me) return
-  setLoading(true)
-  setError("")
-
-  try {
-    // обновляем текстовые поля
-    await updateUser(me.login, { name, email, info })
-
-    // загружаем аватар отдельно, если выбран
-    if (picture) {
-      const res = await uploadAvatar(me.login, picture)
-      console.log("Avatar URL:", res.avatar_url)
+  function renderContent() {
+    switch (active) {
+      case "profile":
+        return <ProfileSettings />
+      case "appearance":
+        return <AppearanceSettings />
+      case "sound":
+        return <SoundSettings />
+      default:
+        return null
     }
-
-    onClose()
-  } catch (e: any) {
-    setError(e.message || "Ошибка при сохранении")
-  } finally {
-    setLoading(false)
   }
-}
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
-        <h2>Settings</h2>
+    <div style={overlayStyle} onClick={onClose}>
+      <div
+  		style={modalStyle}
+  		onClick={(e) => e.stopPropagation()}
+	  >
+        <div style={layoutStyle}>
+          {/* LEFT MENU */}
+          <div style={menuStyle}>
+            <MenuItem
+              label="Profile"
+              active={active === "profile"}
+              onClick={() => setActive("profile")}
+            />
+            <MenuItem
+              label="Appearance"
+              active={active === "appearance"}
+              onClick={() => setActive("appearance")}
+            />
+            <MenuItem
+              label="Sound"
+              active={active === "sound"}
+              onClick={() => setActive("sound")}
+            />
+            <div style={{ flex: 1 }} />
+            <button style={logoutStyle}>Logout</button>
+          </div>
 
-        {/* === Вкладки, пока только Profile === */}
-        <h3>Profile</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <textarea
-            placeholder="Info"
-            value={info}
-            onChange={(e) => setInfo(e.target.value)}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                setPicture(e.target.files[0])
-              }
-            }}
-          />
-        </div>
-
-        {error && <p style={{ color: "red" }}>{error}</p>}
-
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button onClick={onClose} disabled={loading}>Cancel</button>
-          <button onClick={handleSave} disabled={loading}>{loading ? "Saving..." : "Save"}</button>
+          {/* RIGHT CONTENT */}
+          <div style={contentStyle}>
+            {renderContent()}
+          </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function MenuItem({ label, active, onClick }: any) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: "10px 12px",
+        borderRadius: 6,
+        cursor: "pointer",
+        background: active ? "#e0e0ff" : "transparent",
+        fontWeight: active ? 600 : 400
+      }}
+    >
+      {label}
     </div>
   )
 }
@@ -101,9 +96,36 @@ const overlayStyle: React.CSSProperties = {
 
 const modalStyle: React.CSSProperties = {
   background: '#fff',
+  width: 700,
+  height: 500,
+  borderRadius: 10,
+  overflow: "hidden"
+}
+
+const layoutStyle: React.CSSProperties = {
+  display: "flex",
+  height: "100%"
+}
+
+const menuStyle: React.CSSProperties = {
+  width: 180,
+  borderRight: "1px solid #ddd",
+  padding: 10,
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+}
+
+const contentStyle: React.CSSProperties = {
+  flex: 1,
   padding: 20,
-  borderRadius: 8,
-  width: 400,
-  maxHeight: '80vh',
-  overflowY: 'auto'
+  overflowY: "auto"
+}
+
+const logoutStyle: React.CSSProperties = {
+  padding: 8,
+  borderRadius: 6,
+  border: "none",
+  cursor: "pointer",
+  background: "#ffe0e0"
 }

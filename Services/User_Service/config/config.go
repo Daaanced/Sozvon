@@ -78,10 +78,10 @@ func Load() (*Config, error) {
 			Directory:     getEnv("STATIC_DIR", "./static"),
 			AvatarsPath:   getEnv("AVATARS_PATH", "/static/avatars/"),
 			DefaultAvatar: getEnv("DEFAULT_AVATAR", "default.png"),
-			MaxUploadSize: getInt64Env("MAX_UPLOAD_SIZE", 5*1024*1024), // 5MB
+			MaxUploadSize: 5 * 1024 * 1024, // 5MB
 		},
 		Storage: StorageConfig{
-			BackendURL: getEnv("BACKEND_URL", "http://176.51.121.88:8080"),
+			BackendURL: getEnv("BACKEND_URL", "http://176.51.123.160:8080"),
 			CDNEnabled: getBoolEnv("CDN_ENABLED", false),
 			CDNURL:     getEnv("CDN_URL", ""),
 		},

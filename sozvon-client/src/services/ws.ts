@@ -9,7 +9,7 @@ let isOpen = false
 export function connectWS(token: string) {
   if (socket) return
 
-  socket = new WebSocket(`ws://176.51.121.88:8080/ws?token=${token}`)
+  socket = new WebSocket(`ws://176.51.123.160:8080/ws?token=${token}`)
 
   socket.onopen = () => {
   console.log('[WS] connected')

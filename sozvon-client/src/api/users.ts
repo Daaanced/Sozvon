@@ -1,5 +1,5 @@
 //sozvon-client\src\api\users.ts
-import { request } from './http'
+import { request, requestForm } from './http'
 
 export interface User {
   id: number
@@ -12,13 +12,21 @@ export interface User {
   updated_at: string
 }
 
+export interface UpdateUserPayload {
+  name?: string
+  email?: string
+  info?: string
+}
 
 export function searchUser(login: string): Promise<User> {
   return request(`/users/${encodeURIComponent(login)}`)
 }
 
 // ===== Update text fields =====
-export function updateUser(login: string, data: { name?: string, email?: string, info?: string }): Promise<void> {
+export function updateUser(
+  login: string,
+  data: UpdateUserPayload
+): Promise<{ status: string; message: string }> {
   return request(`/users/${encodeURIComponent(login)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -27,15 +35,21 @@ export function updateUser(login: string, data: { name?: string, email?: string,
 }
 
 // ===== Upload avatar =====
-export function uploadAvatar(login: string, file: File): Promise<{ avatar_url: string }> {
+export function uploadAvatar(
+  login: string,
+  file: File
+): Promise<{ avatar_url: string }> {
   const formData = new FormData()
   formData.append('avatar', file)
 
-  return fetch(`http://176.51.121.88:8080/users/${encodeURIComponent(login)}/avatar`, {
-    method: 'POST',
-    body: formData
-  }).then(async res => {
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+  return requestForm(`/users/${login}/avatar`, {
+  method: 'POST',
+  body: formData
+})
+}
+
+export function deleteAvatar(login: string) {
+  return request(`/users/${encodeURIComponent(login)}/avatar`, {
+    method: 'DELETE'
   })
 }

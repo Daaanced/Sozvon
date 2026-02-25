@@ -1,0 +1,5 @@
+*.exe
+
+User_Service/static/avatars/*
+
+!User_Service/static/avatars/default.png

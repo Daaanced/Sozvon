@@ -35,10 +35,10 @@ type CreateUserRequest struct {
 
 // UpdateUserRequest запрос на обновление пользователя
 type UpdateUserRequest struct {
-	Name    string `json:"name" validate:"omitempty,min=1,max=100"`
-	Email   string `json:"email" validate:"omitempty,email,max=255"`
-	Info    string `json:"info" validate:"max=500"`
-	Picture string `json:"picture" validate:"max=255"`
+	Name    *string `json:"name" validate:"omitempty,min=1,max=100"`
+	Email   *string `json:"email" validate:"omitempty,email,max=255"`
+	Info    *string `json:"info" validate:"omitempty,max=500"`
+	Picture *string `json:"picture" validate:"omitempty,max=255"`
 }
 
 // UserListResponse ответ со списком пользователей
@@ -84,16 +84,20 @@ func (r *CreateUserRequest) Validate() error {
 
 // Validate валидирует UpdateUserRequest
 func (r *UpdateUserRequest) Validate() error {
-	if r.Name != "" && (len(r.Name) < 1 || len(r.Name) > 100) {
+	if r.Name != nil && (len(*r.Name) < 1 || len(*r.Name) > 100) {
 		return errors.New("name must be between 1 and 100 characters")
 	}
 
-	if r.Email != "" && !isValidEmail(r.Email) {
-		return ErrInvalidEmail
+	if r.Email != nil {
+		if !isValidEmail(*r.Email) {
+			return ErrInvalidEmail
+		}
 	}
 
-	if len(r.Info) > 500 {
-		return errors.New("info must be less than 500 characters")
+	if r.Info != nil {
+		if len(*r.Info) > 500 {
+			return errors.New("info must be less than 500 characters")
+		}
 	}
 
 	return nil

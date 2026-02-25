@@ -42,6 +42,7 @@ func (h *UserHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/users/{login}", h.UpdateUser).Methods("PUT", "OPTIONS")
 	r.HandleFunc("/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
 	r.HandleFunc("/users/{login}/avatar", h.UploadAvatar).Methods("POST", "OPTIONS")
+	r.HandleFunc("/users/{login}/avatar", h.DeleteAvatar).Methods("DELETE", "OPTIONS")
 	r.HandleFunc("/users/search", h.SearchUsers).Methods("GET", "OPTIONS")
 }
 
@@ -159,17 +160,17 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обновление только переданных полей
-	if req.Name != "" {
-		currentUser.Name = req.Name
+	if req.Name != nil {
+		currentUser.Name = *req.Name
 	}
-	if req.Email != "" {
-		currentUser.Email = req.Email
+	if req.Email != nil {
+		currentUser.Email = *req.Email
 	}
-	if req.Info != "" {
-		currentUser.Info = req.Info
+	if req.Info != nil {
+		currentUser.Info = *req.Info
 	}
-	if req.Picture != "" {
-		currentUser.Picture = req.Picture
+	if req.Picture != nil {
+		currentUser.Picture = *req.Picture
 	}
 
 	// Обновление в БД
@@ -280,6 +281,45 @@ func (h *UserHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		Data: map[string]string{
 			"avatar_url": user.Picture,
 		},
+	})
+}
+
+// DeleteAvatar удаляет аватар пользователя
+func (h *UserHandler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	login := mux.Vars(r)["login"]
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	user, err := h.db.GetUserByLogin(ctx, login)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "user_not_found", "User not found")
+		return
+	}
+
+	if user.Picture == "" {
+		respondWithError(w, http.StatusBadRequest, "no_avatar", "User has no avatar")
+		return
+	}
+
+	// Удаляем файл
+	if err := h.avatarService.DeleteAvatar(user.Picture); err != nil {
+		log.Printf("Error deleting avatar file: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "delete_error", "Failed to delete avatar")
+		return
+	}
+
+	// Обновляем БД
+	user.Picture = ""
+	if err := h.db.UpdateUser(ctx, login, user); err != nil {
+		log.Printf("Error clearing avatar in DB: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to update user")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, models.SuccessResponse{
+		Status:  "ok",
+		Message: "Avatar deleted successfully",
 	})
 }
 
