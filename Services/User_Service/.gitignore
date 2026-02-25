@@ -1,5 +1,5 @@
 *.exe
 
-User_Service/static/avatars/*
+static/avatars/*
 
-!User_Service/static/avatars/default.png
+!static/avatars/default.png
