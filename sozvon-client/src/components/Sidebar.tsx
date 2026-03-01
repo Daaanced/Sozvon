@@ -1,6 +1,6 @@
 // sozvon-client/src/components/Sidebar.tsx
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useChatContext } from '../context/ChatContext'
+import { useChatContext, DELETED_USER } from '../context/ChatContext'
 import { useState } from 'react'
 import SettingsModal from './SettingsModal'
 
@@ -22,7 +22,7 @@ export default function Sidebar() {
       <div style={styles.chatList}>
         {chats.map(chat => {
           const withLogin = chat.members.find(m => m !== myLogin)!
-          const user = users[withLogin]
+          const user = users[withLogin] || DELETED_USER
           const isActive = location.pathname.endsWith(chat.chatId)
 
           return (

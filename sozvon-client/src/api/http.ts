@@ -1,5 +1,5 @@
 //sozvon-client\src\api\http.ts
-const API_URL = 'http://176.51.123.160:8080'
+const API_URL = 'http://92.127.177.190:8080'
 
 export async function request(
   path: string,

@@ -13,7 +13,7 @@ export default function Login() {
     try {
       const res = await loginRequest(login, password)
       localStorage.setItem('token', res.token)
-      navigate('/app')
+      navigate('/app', { replace: true })
     } catch (e: any) {
       setError(e.message)
     }

@@ -15,8 +15,19 @@ type ChatContextType = {
   users: Record<string, User>
   myLogin: string
   me: User | null
+  getSafeUser: (login: string) => User
 }
 
+export const DELETED_USER: User = {
+  id: 0,
+  login: '-',
+  name: 'deleted',	
+  email: '-',
+  info: '-',
+  picture: 'http://92.127.177.190:8080/static/avatars/deleted.png',
+  created_at: '-',
+  updated_at: '-',
+}
 
 const ChatContext = createContext<ChatContextType | null>(null)
 
@@ -30,7 +41,6 @@ export function useChatContext() {
   return ctx
 }
 
-
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token')
  
@@ -38,14 +48,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   return null
 }
 
-
   const myLogin = parseToken(token)!
   const [me, setMe] = useState<User | null>(null)
   const [chats, setChats] = useState<Chat[]>([])
   const [users, setUsers] = useState<Record<string, User>>({})
 
+  function getSafeUser(login: string): User {
+  if (login === myLogin) {
+    return me || DELETED_USER
+  }
+
+  return users[login] || DELETED_USER
+}
+
   async function loadChats() {
-  const res = await fetch('http://176.51.123.160:8080/chats', {
+  const res = await fetch('http://92.127.177.190:8080/chats', {
     headers: { Authorization: `Bearer ${token}` }
   })
 
@@ -63,9 +80,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   safeChats.forEach(async chat => {
     const withLogin = chat.members?.find(m => m !== myLogin)
     if (withLogin && !users[withLogin]) {
-      const u = await searchUser(withLogin)
-      setUsers(prev => ({ ...prev, [withLogin]: u }))
-    }
+  try {
+    const u = await searchUser(withLogin)
+    setUsers(prev => ({
+      ...prev,
+      [withLogin]: u || DELETED_USER
+    }))
+  } catch {
+    setUsers(prev => ({
+      ...prev,
+      [withLogin]: DELETED_USER
+    }))
+  }
+}
   })
 }
 
@@ -90,7 +117,7 @@ useEffect(() => {
 
 
   return (
-    <ChatContext.Provider value={{ chats, users, myLogin, me }}>
+    <ChatContext.Provider value={{ chats, users, myLogin, me, getSafeUser }}>
       {children}
     </ChatContext.Provider>
   )

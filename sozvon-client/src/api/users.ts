@@ -53,3 +53,9 @@ export function deleteAvatar(login: string) {
     method: 'DELETE'
   })
 }
+
+export function deleteUser(login: string) {
+  return request(`/auth/users/${encodeURIComponent(login)}`, {
+    method: 'DELETE'
+  })
+}

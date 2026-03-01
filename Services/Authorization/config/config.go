@@ -12,6 +12,7 @@ type Config struct {
 	Database    DatabaseConfig
 	JWT         JWTConfig
 	UserService UserServiceConfig
+	ChatService ChatServiceConfig
 	CORS        CORSConfig
 }
 
@@ -41,6 +42,11 @@ type JWTConfig struct {
 }
 
 type UserServiceConfig struct {
+	URL     string
+	Timeout time.Duration
+}
+
+type ChatServiceConfig struct {
 	URL     string
 	Timeout time.Duration
 }
@@ -80,6 +86,10 @@ func Load() (*Config, error) {
 		UserService: UserServiceConfig{
 			URL:     getEnv("USER_SERVICE_URL", "http://localhost:8083"),
 			Timeout: getDurationEnv("USER_SERVICE_TIMEOUT", 10*time.Second),
+		},
+		ChatService: ChatServiceConfig{
+			URL:     getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
+			Timeout: getDurationEnv("CHAT_SERVICE_TIMEOUT", 10*time.Second),
 		},
 		CORS: CORSConfig{
 			AllowedOrigins:   []string{getEnv("CORS_ALLOWED_ORIGINS", "*")},

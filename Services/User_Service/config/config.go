@@ -81,7 +81,7 @@ func Load() (*Config, error) {
 			MaxUploadSize: 5 * 1024 * 1024, // 5MB
 		},
 		Storage: StorageConfig{
-			BackendURL: getEnv("BACKEND_URL", "http://176.51.123.160:8080"),
+			BackendURL: getEnv("BACKEND_URL", "http://92.127.177.190:8080"),
 			CDNEnabled: getBoolEnv("CDN_ENABLED", false),
 			CDNURL:     getEnv("CDN_URL", ""),
 		},

@@ -23,6 +23,7 @@ type AuthHandler struct {
 	jwtService     *auth.JWTService
 	passwordHasher auth.PasswordHasher
 	userService    *UserServiceClient
+	chatService    *ChatServiceClient
 }
 
 // NewAuthHandler создает новый обработчик аутентификации
@@ -33,6 +34,7 @@ func NewAuthHandler(cfg *config.Config, database *db.Database) *AuthHandler {
 		jwtService:     auth.NewJWTService(cfg.JWT.SecretKey, cfg.JWT.TokenDuration),
 		passwordHasher: auth.NewBcryptHasher(),
 		userService:    NewUserServiceClient(cfg.UserService),
+		chatService:    NewChatServiceClient(cfg.ChatService), // ← добавить
 	}
 }
 
@@ -41,6 +43,7 @@ func (h *AuthHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/auth/register", h.Register).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", h.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/validate", h.ValidateToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/auth/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS") // ✅ ДОБАВИТЬ
 }
 
 // Register обрабатывает регистрацию нового пользователя
@@ -197,7 +200,59 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --- Вспомогательные функции ---
+// DeleteUserProfile удаляет профиль пользователя из User Service
+func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	login := mux.Vars(r)["login"]
+
+	log.Printf("Deleting user: %s", login)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// 1. Проверка существования в Authorization Service
+	exists, err := h.db.UserExists(ctx, login)
+	if err != nil {
+		log.Printf("Error checking user existence: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to check user existence")
+		return
+	}
+
+	if !exists {
+		respondWithError(w, http.StatusNotFound, "user_not_found", "User not found")
+		return
+	}
+
+	// 2. Удалить из User Service
+	log.Printf("Deleting user profile from User Service: %s", login)
+	if err := h.userService.DeleteUserProfile(ctx, login); err != nil {
+		log.Printf("Warning: failed to delete user profile: %v", err)
+	} else {
+		log.Printf("✅ User profile deleted from User Service: %s", login)
+	}
+
+	// 2.5. Удалить записи из chat_members в Chat Service  ← новый шаг
+	log.Printf("Deleting chat members records for: %s", login)
+	if err := h.chatService.DeleteChatMembersByLogin(ctx, login); err != nil {
+		log.Printf("Warning: failed to delete chat members: %v", err)
+	} else {
+		log.Printf("✅ Chat members records deleted for: %s", login)
+	}
+
+	// 3. Удалить из Authorization Service
+	log.Printf("Deleting user from Authorization Service: %s", login)
+	if err := h.db.DeleteUser(ctx, login); err != nil {
+		log.Printf("Error deleting user from auth DB: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to delete user")
+		return
+	}
+	log.Printf("✅ User deleted from Authorization Service: %s", login)
+
+	// ✅ Успех
+	respondWithJSON(w, http.StatusOK, models.SuccessResponse{
+		Status:  "ok",
+		Message: "User deleted successfully from all services",
+	})
+}
 
 func validateRegisterRequest(req models.RegisterRequest) error {
 	if len(req.Login) < 3 || len(req.Login) > 50 {

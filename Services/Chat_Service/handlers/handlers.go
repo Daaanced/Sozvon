@@ -50,6 +50,7 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/chats", h.GetChats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}", h.GetChatInfo).Methods("GET", "OPTIONS")
+	r.HandleFunc("/internal/members/{login}", h.DeleteMembersByLogin).Methods("DELETE")
 }
 
 // HandleWebSocket обрабатывает WebSocket подключения
@@ -210,6 +211,32 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, messages)
+}
+
+// DeleteMembersByLogin удаляет все записи пользователя из chat_members (internal endpoint)
+func (h *ChatHandler) DeleteMembersByLogin(w http.ResponseWriter, r *http.Request) {
+	login := mux.Vars(r)["login"]
+	if login == "" {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Login required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	rowsAffected, err := h.db.DeleteChatMembersByLogin(ctx, login)
+	if err != nil {
+		log.Printf("Error deleting chat members for login %s: %v", login, err)
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to delete chat members")
+		return
+	}
+
+	log.Printf("Deleted %d chat_members records for login: %s", rowsAffected, login)
+
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"login":         login,
+		"rows_affected": rowsAffected,
+	})
 }
 
 // GetChatInfo возвращает информацию о чате

@@ -311,6 +311,23 @@ func (d *Database) ChatExists(ctx context.Context, chatID string) (bool, error) 
 	return exists, nil
 }
 
+// DeleteChatMembersByLogin удаляет все записи участника из chat_members по логину
+func (d *Database) DeleteChatMembersByLogin(ctx context.Context, login string) (int64, error) {
+	query := `DELETE FROM chat_members WHERE login = $1`
+
+	result, err := d.db.ExecContext(ctx, query, login)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete chat members by login: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return rowsAffected, nil
+}
+
 // pqStringArray для работы с PostgreSQL массивами
 type pqStringArray []string
 

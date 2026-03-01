@@ -34,7 +34,7 @@ export default function Main() {
       const token = localStorage.getItem('token')!
       const loginFromToken = parseToken(token)
 
-      const res = await fetch('http://176.51.123.160:8080/chats/create', {
+      const res = await fetch('http://92.127.177.190:8080/chats/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

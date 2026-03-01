@@ -6,8 +6,10 @@ import {
   updateUser,
   uploadAvatar,
   deleteAvatar,
+  deleteUser,
   UpdateUserPayload
 } from "../../api/users"
+import { useNavigate } from "react-router-dom"
 
 // type Props = {
 //   onClose: () => void
@@ -24,7 +26,10 @@ export default function ProfileSettings() {
   const [picture, setPicture] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-
+  const navigate = useNavigate()
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  
   if (!me) return null
 
   function getShortFileName() {
@@ -75,7 +80,22 @@ export default function ProfileSettings() {
   setPicture(null)
 }
 
+async function handleDeleteUser() {
+  if (!me) return
+
+  try {
+    setDeleting(true)
+    await deleteUser(me.login)
+    navigate("/login")
+  } catch (err) {
+    console.error("Failed to delete user", err)
+  } finally {
+    setDeleting(false)
+  }
+}
+
   return (
+	<>
     <div style={containerStyle}>
       <h2>Profile</h2>
 
@@ -147,13 +167,58 @@ export default function ProfileSettings() {
         />
       </div>
 
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 10 }}>
         <button onClick={handleSave} disabled={loading}>
           {loading ? "Saving..." : "Save"}
         </button>
         {success && <span style={{ marginLeft: 10, color: "green" }}>Saved ✓</span>}
       </div>
+
+	  <div style={{ marginTop: 20 }}>
+		<button
+			onClick={() => setShowDeleteModal(true)}
+			style={{
+			background: "#ff4d4f",
+			color: "white",
+			border: "none",
+			padding: "8px 14px",
+			borderRadius: 6,
+			cursor: "pointer"
+    }}
+  >
+    Delete Profile
+  </button>
+</div>
     </div>
+	{showDeleteModal && (
+  <div style={modalOverlay}>
+    <div style={modalContent}>
+      <h3>Approving deletion</h3>
+      <p>Are you sure you want to delete your profile? This action is irreversible.</p>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <button onClick={() => setShowDeleteModal(false)}>
+          Cancel
+        </button>
+
+        <button
+          onClick={handleDeleteUser}
+          disabled={deleting}
+          style={{
+            background: "#ff4d4f",
+            color: "white",
+            border: "none",
+            padding: "6px 12px",
+            borderRadius: 6
+          }}
+        >
+          {deleting ? "deletion..." : "delete"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+</>
   )
 }
 
@@ -210,4 +275,27 @@ const field: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 4
+}
+
+const modalOverlay: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: "rgba(0,0,0,0.4)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000
+}
+
+const modalContent: React.CSSProperties = {
+  background: "white",
+  padding: 20,
+  borderRadius: 10,
+  width: 350,
+  display: "flex",
+  flexDirection: "column",
+  gap: 15
 }

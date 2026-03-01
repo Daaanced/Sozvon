@@ -113,7 +113,7 @@ func (c *UserServiceClient) createUserProfileAttempt(ctx context.Context, jsonBo
 	return nil
 }
 
-// DeleteUserProfile удаляет профиль пользователя (для отката транзакций)
+// DeleteUserProfile удаляет профиль пользователя из User Service
 func (c *UserServiceClient) DeleteUserProfile(ctx context.Context, login string) error {
 	req, err := http.NewRequestWithContext(
 		ctx,
@@ -131,7 +131,8 @@ func (c *UserServiceClient) DeleteUserProfile(ctx context.Context, login string)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+	// 200 OK или 404 Not Found - оба ОК (пользователь удален или уже отсутствует)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("delete failed with status %d: %s", resp.StatusCode, string(body))
 	}

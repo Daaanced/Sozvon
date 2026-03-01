@@ -6,10 +6,19 @@ let socket: WebSocket | null = null
 let listeners: ((msg: any) => void)[] = []
 let isOpen = false
 
+export function disconnectWS() {
+  if (socket) {
+    socket.close()
+    socket = null
+  }
+  listeners = []
+  isOpen = false
+}
+
 export function connectWS(token: string) {
   if (socket) return
 
-  socket = new WebSocket(`ws://176.51.123.160:8080/ws?token=${token}`)
+  socket = new WebSocket(`ws://92.127.177.190:8080/ws?token=${token}`)
 
   socket.onopen = () => {
   console.log('[WS] connected')

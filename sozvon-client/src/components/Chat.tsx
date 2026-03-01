@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { onWSMessage, sendWS } from '../services/ws'
 import { v4 as uuidv4 } from "uuid"
+import { useChatContext } from '../context/ChatContext'
 
 type Props = {
   chatId: string
@@ -15,6 +16,7 @@ type Message = {
 }
 
 export default function Chat({ chatId }: Props) {
+  const { getSafeUser } = useChatContext()
   const [messages, setMessages] = useState<Message[]>([])
   const [text, setText] = useState('')
 
@@ -27,7 +29,7 @@ export default function Chat({ chatId }: Props) {
       const token = localStorage.getItem('token')
 
       const res = await fetch(
-        `http://176.51.123.160:8080/chats/${chatId}/messages`,
+        `http://92.127.177.190:8080/chats/${chatId}/messages`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -83,6 +85,28 @@ export default function Chat({ chatId }: Props) {
     setText('')
   }
 
+function formatTime(dateString: string) {
+  const d = new Date(dateString)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatFullDate(dateString: string) {
+  const d = new Date(dateString)
+  return d.toLocaleDateString('ru-RU') + ', ' +
+         d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function isSameDay(a: string, b: string) {
+  const d1 = new Date(a)
+  const d2 = new Date(b)
+
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  )
+}
+
   return (
     <div
       style={{
@@ -106,11 +130,62 @@ export default function Chat({ chatId }: Props) {
           marginBottom: 12,
         }}
       >
-        {messages.map(m => (
-          <div key={m.id} style={{ marginBottom: 6 }}>
-            <b>{m.from}:</b> {m.text}
+{messages.map((m, index) => {
+  const user = getSafeUser(m.from)
+  const prev = messages[index - 1]
+
+  const isGroupStart =
+    !prev ||
+    prev.from !== m.from ||
+    !isSameDay(prev.createdAt, m.createdAt)
+
+  if (isGroupStart) {
+    // 🟢 Тип 1 — с аватаром
+    return (
+      <div key={m.id} style={styles.groupStartWrapper}>
+        <img
+          src={user.picture}
+          style={styles.avatar}
+        />
+
+        <div style={styles.groupContent}>
+          <div style={styles.headerLine}>
+            <span style={styles.userName}>
+              {user.name}
+            </span>
+
+            <span style={styles.fullDate}>
+              {formatFullDate(m.createdAt)}
+            </span>
           </div>
-        ))}
+
+          <div style={styles.messageText}>
+            {m.text}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 🔵 Тип 2 — внутри группы
+  return (
+  <div key={m.id} style={styles.groupStartWrapper}>
+    {/* ЛЕВАЯ КОЛОНКА (под аватаром) */}
+    <div style={styles.timeColumn}>
+      <span style={styles.smallTime}>
+        {formatTime(m.createdAt)}
+      </span>
+    </div>
+
+    {/* ПРАВАЯ КОЛОНКА */}
+    <div style={styles.groupContent}>
+      <div style={styles.messageText}>
+        {m.text}
+      </div>
+    </div>
+  </div>
+)
+})}
       </div>
 
       {/* Ввод */}
@@ -133,4 +208,65 @@ export default function Chat({ chatId }: Props) {
       </div>
     </div>
   )
+}
+
+const styles = {
+  groupStartWrapper: {
+    display: 'flex',
+    gap: 12,
+    marginTop: 2,
+  },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: '50%',
+    objectFit: 'cover' as const,
+    flexShrink: 0,
+  },
+
+  groupContent: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+  },
+
+  headerLine: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+
+  userName: {
+    fontWeight: 600,
+    fontSize: 15,
+  },
+
+  fullDate: {
+    fontSize: 12,
+    color: '#888',
+  },
+
+  messageText: {
+    marginTop: 4,
+    lineHeight: 1.4,
+    wordBreak: 'break-word' as const,
+  },
+
+  timeColumn: {
+	width: 40,
+	display: 'flex',
+	justifyContent: 'center',
+	alignItems: 'baseline',
+	paddingTop: 4, // чуть ниже верхней линии
+   },
+
+  smallTime: {
+	fontSize: 12,
+	color: '#888',
+	width: 40,
+	flexShrink: 0,
+	marginTop: 4,
+	textAlign: 'center' as const,     // ← вот это главное
+	},
 }

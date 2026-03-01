@@ -1,8 +1,10 @@
 // sozvon-client/src/components/SettingsModal.tsx
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import ProfileSettings from "./settings/ProfileSettings"
 import AppearanceSettings from "./settings/AppearanceSettings"
 import SoundSettings from "./settings/SoundSettings"
+import { disconnectWS } from "../services/ws"
 
 type Props = {
   onClose: () => void
@@ -12,6 +14,14 @@ type Section = "profile" | "appearance" | "sound"
 
 export default function SettingsModal({ onClose }: Props) {
   const [active, setActive] = useState<Section>("profile")
+  const navigate = useNavigate()
+  
+  function handleLogout() {
+    localStorage.removeItem('token')
+    disconnectWS()
+    onClose()
+    navigate('/login', { replace: true })
+  }
 
   function renderContent() {
     switch (active) {
@@ -51,7 +61,7 @@ export default function SettingsModal({ onClose }: Props) {
               onClick={() => setActive("sound")}
             />
             <div style={{ flex: 1 }} />
-            <button style={logoutStyle}>Logout</button>
+            <button style={logoutStyle} onClick={handleLogout}>Logout</button>
           </div>
 
           {/* RIGHT CONTENT */}
