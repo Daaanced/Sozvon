@@ -71,7 +71,16 @@ func (d *Database) Migrate() error {
 			text       TEXT NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		);
+		CREATE TABLE IF NOT EXISTS attachments (
+			id         UUID PRIMARY KEY,
+			message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+			file_name  TEXT NOT NULL,
+			store_name TEXT NOT NULL,
+			mime_type  TEXT NOT NULL,
+			size       BIGINT NOT NULL
+		);
 
+		CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
 		CREATE INDEX IF NOT EXISTS idx_messages_chat_id_created ON messages(chat_id, created_at);
 		CREATE INDEX IF NOT EXISTS idx_chats_active ON chats(active);
 		CREATE INDEX IF NOT EXISTS idx_chat_members_user_id ON chat_members(user_id);

@@ -17,27 +17,38 @@ const MaxMessageLength = 4000
 
 type Chat struct {
 	ID        string    `json:"id"`
-	Members   []int     `json:"members"` // user IDs
+	Members   []int     `json:"members"`
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type ChatListItem struct {
 	ChatID      string    `json:"chatId"`
-	Members     []int     `json:"members"` // user IDs
+	Members     []int     `json:"members"`
 	LastMessage string    `json:"lastMessage"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-type Message struct {
-	ID        string    `json:"id"`
-	ChatID    string    `json:"chatId"`
-	SenderID  int       `json:"senderId"` // user ID
-	Text      string    `json:"text"`
-	CreatedAt time.Time `json:"createdAt"`
+// Attachment — вложение к сообщению
+type Attachment struct {
+	ID        string `json:"id"`
+	MessageID string `json:"messageId"`
+	FileName  string `json:"fileName"`
+	StoreName string `json:"-"` // имя файла на диске, не отдаём клиенту
+	MimeType  string `json:"mimeType"`
+	Size      int64  `json:"size"`
+	URL       string `json:"url"` // заполняется при отдаче, не хранится в БД
 }
 
-// CreateChatRequest — from/to теперь user_id
+type Message struct {
+	ID          string       `json:"id"`
+	ChatID      string       `json:"chatId"`
+	SenderID    int          `json:"senderId"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+	CreatedAt   time.Time    `json:"createdAt"`
+}
+
 type CreateChatRequest struct {
 	FromID int `json:"from_id"`
 	ToID   int `json:"to_id"`
@@ -53,7 +64,6 @@ func (r *CreateChatRequest) Validate() error {
 	return nil
 }
 
-// SendMessageRequest — REST тело для отправки сообщения
 type SendMessageRequest struct {
 	Text string `json:"text"`
 }
@@ -68,7 +78,6 @@ func (r *SendMessageRequest) Validate() error {
 	return nil
 }
 
-// WSMessage — только для push-уведомлений
 type WSMessage struct {
 	Event string      `json:"event"`
 	Data  interface{} `json:"data"`

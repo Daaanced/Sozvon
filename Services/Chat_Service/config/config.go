@@ -13,6 +13,13 @@ type Config struct {
 	JWT       JWTConfig
 	WebSocket WebSocketConfig
 	CORS      CORSConfig
+	Media     MediaConfig // ← новое
+}
+
+type MediaConfig struct {
+	Directory   string
+	MaxFileSize int64
+	BaseURL     string
 }
 
 type ServerConfig struct {
@@ -73,6 +80,11 @@ func Load() (*Config, error) {
 			MaxOpenConns:    getIntEnv("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:    getIntEnv("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getDurationEnv("DB_CONN_MAX_LIFETIME", 5*time.Minute),
+		},
+		Media: MediaConfig{
+			Directory:   getEnv("MEDIA_DIR", "./Media"),
+			MaxFileSize: 30 * 1024 * 1024, // 30 MB
+			BaseURL:     getEnv("MEDIA_BASE_URL", "http://92.127.177.190:8080"),
 		},
 		JWT: JWTConfig{
 			SecretKey: []byte(getEnv("JWT_SECRET_KEY", "supersecretkey")),

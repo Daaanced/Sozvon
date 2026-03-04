@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"Chat_Service/config"
 	"Chat_Service/db"
 	"Chat_Service/models"
+	"Chat_Service/storage"
 	"Chat_Service/ws"
 
 	"github.com/gorilla/mux"
@@ -30,14 +33,21 @@ type ChatHandler struct {
 	db         *db.Database
 	hub        *ws.Hub
 	jwtService *auth.JWTService
+	storage    *storage.FileStorage // ← новое
 }
 
 func NewChatHandler(cfg *config.Config, database *db.Database, hub *ws.Hub) *ChatHandler {
+	fileStorage, err := storage.NewFileStorage(cfg.Media.Directory, cfg.Media.BaseURL)
+	if err != nil {
+		log.Fatalf("Failed to init file storage: %v", err)
+	}
+
 	return &ChatHandler{
 		config:     cfg,
 		db:         database,
 		hub:        hub,
 		jwtService: auth.NewJWTService(cfg.JWT.SecretKey),
+		storage:    fileStorage,
 	}
 }
 
@@ -47,6 +57,8 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/chats", h.GetChats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.SendMessage).Methods("POST", "OPTIONS")
+	r.HandleFunc("/chats/{chatId}/upload", h.UploadFiles).Methods("POST", "OPTIONS")
+	r.HandleFunc("/media/{filename}", h.ServeMedia).Methods("GET")
 	r.HandleFunc("/chats/{chatId}", h.GetChatInfo).Methods("GET", "OPTIONS")
 	r.HandleFunc("/internal/members/{userId}", h.DeleteMembersByUserID).Methods("DELETE")
 }
@@ -209,6 +221,154 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusCreated, msg)
 }
 
+// UploadFiles — POST /chats/{chatId}/upload
+// multipart/form-data: files[] + опциональный text
+func (h *ChatHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
+	chatID := mux.Vars(r)["chatId"]
+
+	userID, err := h.extractUserIDFromAuth(r)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
+		return
+	}
+
+	// Ограничиваем размер всего запроса
+	r.Body = http.MaxBytesReader(w, r.Body, h.config.Media.MaxFileSize*10)
+	if err := r.ParseMultipartForm(h.config.Media.MaxFileSize); err != nil {
+		respondWithError(w, http.StatusBadRequest, "file_too_large", "Request too large")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	// Проверка членства
+	isMember, err := h.db.IsMember(ctx, chatID, userID)
+	if err != nil || !isMember {
+		respondWithError(w, http.StatusForbidden, "forbidden", "You are not a member of this chat")
+		return
+	}
+
+	text := r.FormValue("text")
+
+	// Валидация: должен быть либо текст, либо файлы
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 && text == "" {
+		respondWithError(w, http.StatusBadRequest, "empty_message", "Text or files required")
+		return
+	}
+
+	// Проверка размера каждого файла
+	for _, fh := range files {
+		if fh.Size > h.config.Media.MaxFileSize {
+			respondWithError(w, http.StatusBadRequest, "file_too_large",
+				fmt.Sprintf("File %s exceeds 30MB limit", fh.Filename))
+			return
+		}
+	}
+
+	// Сохраняем сообщение
+	msg, err := h.db.SaveMessage(ctx, chatID, userID, text)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to save message")
+		return
+	}
+
+	// Сохраняем файлы
+	var attachments []models.Attachment
+	for _, fh := range files {
+		file, err := fh.Open()
+		if err != nil {
+			log.Printf("Failed to open uploaded file: %v", err)
+			continue
+		}
+
+		saved, err := h.storage.Save(file, fh)
+		file.Close()
+		if err != nil {
+			log.Printf("Failed to save file %s: %v", fh.Filename, err)
+			continue
+		}
+
+		a := models.Attachment{
+			ID:        db.NewAttachmentID(),
+			MessageID: msg.ID,
+			FileName:  saved.FileName,
+			StoreName: saved.ID + getExt(saved.FileName),
+			MimeType:  saved.MimeType,
+			Size:      saved.Size,
+			URL:       saved.URL,
+		}
+
+		if err := h.db.SaveAttachment(ctx, a); err != nil {
+			log.Printf("Failed to save attachment record: %v", err)
+			h.storage.Delete(a.StoreName)
+			continue
+		}
+
+		attachments = append(attachments, a)
+	}
+
+	msg.Attachments = attachments
+
+	// Активация чата при первом сообщении
+	if activated, _ := h.db.ActivateChat(ctx, chatID); activated {
+		members, _ := h.db.GetChatMembers(ctx, chatID)
+		h.hub.SendToUsers(members, models.WSMessage{
+			Event: "chat:activated",
+			Data:  map[string]string{"chatId": chatID},
+		})
+	}
+
+	// Push всем участникам кроме отправителя
+	members, err := h.db.GetChatMembers(ctx, chatID)
+	if err == nil {
+		recipients := make([]int, 0, len(members))
+		for _, uid := range members {
+			if uid != userID {
+				recipients = append(recipients, uid)
+			}
+		}
+		h.hub.SendToUsers(recipients, models.WSMessage{
+			Event: "message:new",
+			Data:  msg,
+		})
+	}
+
+	respondWithJSON(w, http.StatusCreated, msg)
+}
+
+// ServeMedia — GET /media/{filename}
+// Отдаёт файл из папки Media
+func (h *ChatHandler) ServeMedia(w http.ResponseWriter, r *http.Request) {
+	filename := mux.Vars(r)["filename"]
+
+	// Защита от path traversal
+	if strings.Contains(filename, "..") || strings.Contains(filename, "/") {
+		respondWithError(w, http.StatusBadRequest, "invalid_filename", "Invalid filename")
+		return
+	}
+
+	filePath := h.storage.FilePath(filename)
+
+	// Проверяем что файл существует
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		respondWithError(w, http.StatusNotFound, "not_found", "File not found")
+		return
+	}
+
+	http.ServeFile(w, r, filePath)
+}
+
+// getExt возвращает расширение файла включая точку
+func getExt(filename string) string {
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		return ""
+	}
+	return ext
+}
+
 // GetChats — требует Authorization header
 func (h *ChatHandler) GetChats(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.extractUserIDFromAuth(r)
@@ -252,6 +412,29 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to get messages")
 		return
+	}
+
+	// Подгружаем вложения для всех сообщений одним запросом
+	if len(messages) > 0 {
+		ids := make([]string, len(messages))
+		for i, m := range messages {
+			ids[i] = m.ID
+		}
+
+		attachmentsMap, err := h.db.GetAttachmentsByMessageIDs(ctx, ids)
+		if err != nil {
+			log.Printf("Failed to load attachments: %v", err)
+		} else {
+			for i, m := range messages {
+				if atts, ok := attachmentsMap[m.ID]; ok {
+					// Заполняем URL (не хранится в БД)
+					for j := range atts {
+						atts[j].URL = h.config.Media.BaseURL + "/media/" + atts[j].StoreName
+					}
+					messages[i].Attachments = atts
+				}
+			}
+		}
 	}
 
 	respondWithJSON(w, http.StatusOK, messages)
