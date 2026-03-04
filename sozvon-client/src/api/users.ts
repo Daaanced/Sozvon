@@ -1,4 +1,4 @@
-//sozvon-client\src\api\users.ts
+// sozvon-client/src/api/users.ts
 import { request, requestForm } from './http'
 
 export interface User {
@@ -22,11 +22,11 @@ export function searchUser(login: string): Promise<User> {
   return request(`/users/${encodeURIComponent(login)}`)
 }
 
-// ===== Update text fields =====
-export function updateUser(
-  login: string,
-  data: UpdateUserPayload
-): Promise<{ status: string; message: string }> {
+export function getUserById(id: number): Promise<User> {
+  return request(`/users/id/${id}`)
+}
+
+export function updateUser(login: string, data: UpdateUserPayload) {
   return request(`/users/${encodeURIComponent(login)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -34,28 +34,16 @@ export function updateUser(
   })
 }
 
-// ===== Upload avatar =====
-export function uploadAvatar(
-  login: string,
-  file: File
-): Promise<{ avatar_url: string }> {
+export function uploadAvatar(login: string, file: File): Promise<{ avatar_url: string }> {
   const formData = new FormData()
   formData.append('avatar', file)
-
-  return requestForm(`/users/${login}/avatar`, {
-  method: 'POST',
-  body: formData
-})
+  return requestForm(`/users/${login}/avatar`, { method: 'POST', body: formData })
 }
 
 export function deleteAvatar(login: string) {
-  return request(`/users/${encodeURIComponent(login)}/avatar`, {
-    method: 'DELETE'
-  })
+  return request(`/users/${encodeURIComponent(login)}/avatar`, { method: 'DELETE' })
 }
 
 export function deleteUser(login: string) {
-  return request(`/auth/users/${encodeURIComponent(login)}`, {
-    method: 'DELETE'
-  })
+  return request(`/auth/users/${encodeURIComponent(login)}`, { method: 'DELETE' })
 }

@@ -37,13 +37,14 @@ func NewUserHandler(cfg *config.Config, database *db.Database) *UserHandler {
 // RegisterRoutes регистрирует маршруты для пользователей
 func (h *UserHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/users", h.GetUsers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/users/search", h.SearchUsers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/users/id/{id}", h.GetUserByID).Methods("GET", "OPTIONS")
 	r.HandleFunc("/users/{login}", h.GetUser).Methods("GET", "OPTIONS")
 	r.HandleFunc("/users", h.CreateUser).Methods("POST", "OPTIONS")
 	r.HandleFunc("/users/{login}", h.UpdateUser).Methods("PUT", "OPTIONS")
 	r.HandleFunc("/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
 	r.HandleFunc("/users/{login}/avatar", h.UploadAvatar).Methods("POST", "OPTIONS")
 	r.HandleFunc("/users/{login}/avatar", h.DeleteAvatar).Methods("DELETE", "OPTIONS")
-	r.HandleFunc("/users/search", h.SearchUsers).Methods("GET", "OPTIONS")
 }
 
 // GetUsers получает список всех пользователей с пагинацией
@@ -84,6 +85,29 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Дополнение URL аватара
+	h.avatarService.FillAvatarURL(&user)
+
+	respondWithJSON(w, http.StatusOK, user)
+}
+
+// GetUserByID получает пользователя по числовому ID
+func (h *UserHandler) GetUserByID(w http.ResponseWriter, r *http.Request) {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		respondWithError(w, http.StatusBadRequest, "invalid_id", "Invalid user ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	user, err := h.db.GetUserByID(ctx, id)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "user_not_found", "User not found")
+		return
+	}
+
 	h.avatarService.FillAvatarURL(&user)
 
 	respondWithJSON(w, http.StatusOK, user)

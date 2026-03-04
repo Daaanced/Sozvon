@@ -52,13 +52,14 @@ type Claims struct {
 }
 
 // GenerateToken создает JWT токен для пользователя
-func (s *JWTService) GenerateToken(login string) (string, error) {
+func (s *JWTService) GenerateToken(login string, userID int) (string, error) {
 	if login == "" {
 		return "", errors.New("login cannot be empty")
 	}
 
 	claims := &Claims{
-		Login: login,
+		Login:  login,
+		UserID: fmt.Sprintf("%d", userID), // кладём user_id как строку
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.tokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

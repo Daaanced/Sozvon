@@ -1,3 +1,5 @@
+//sozvon-client\src\layouts\AppShell.tsx
+
 import { Outlet } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import UserInfo from '../components/UserInfo'

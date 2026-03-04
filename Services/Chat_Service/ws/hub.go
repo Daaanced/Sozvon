@@ -2,21 +2,18 @@
 package ws
 
 import (
-	"context"
 	"log"
 	"sync"
-	"time"
 
 	"Chat_Service/config"
 	"Chat_Service/db"
 	"Chat_Service/models"
 )
 
-// Hub управляет WebSocket клиентами и рассылкой сообщений
 type Hub struct {
 	config     *config.Config
 	db         *db.Database
-	clients    sync.Map // login -> *Client
+	clients    sync.Map // userID (int) -> *Client
 	Register   chan *Client
 	Unregister chan *Client
 	broadcast  chan *BroadcastMessage
@@ -24,13 +21,11 @@ type Hub struct {
 	wg         sync.WaitGroup
 }
 
-// BroadcastMessage сообщение для рассылки
 type BroadcastMessage struct {
-	Recipients []string
+	Recipients []int // user IDs
 	Message    models.WSMessage
 }
 
-// NewHub создает новый WebSocket hub
 func NewHub(cfg *config.Config, database *db.Database) *Hub {
 	return &Hub{
 		config:     cfg,
@@ -42,7 +37,6 @@ func NewHub(cfg *config.Config, database *db.Database) *Hub {
 	}
 }
 
-// Run запускает главный цикл hub
 func (h *Hub) Run() {
 	h.wg.Add(1)
 	defer h.wg.Done()
@@ -51,13 +45,10 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.Register:
 			h.registerClient(client)
-
 		case client := <-h.Unregister:
 			h.unregisterClient(client)
-
 		case msg := <-h.broadcast:
 			h.broadcastMessage(msg)
-
 		case <-h.shutdown:
 			h.shutdownAllClients()
 			return
@@ -65,269 +56,109 @@ func (h *Hub) Run() {
 	}
 }
 
-// registerClient регистрирует нового клиента
 func (h *Hub) registerClient(client *Client) {
-	// Проверка на существующее подключение
-	if existing, exists := h.clients.LoadAndDelete(client.Login); exists {
+	if existing, exists := h.clients.LoadAndDelete(client.UserID); exists {
 		if c, ok := existing.(*Client); ok {
-			log.Printf("Closing existing connection for %s", client.Login)
 			c.Close()
 		}
 	}
-
-	h.clients.Store(client.Login, client)
-	log.Printf("Client registered: %s (total: %d)", client.Login, h.GetClientCount())
+	h.clients.Store(client.UserID, client)
+	log.Printf("WS client registered: userID=%d", client.UserID)
 }
 
-// unregisterClient отключает клиента
 func (h *Hub) unregisterClient(client *Client) {
-	if _, exists := h.clients.LoadAndDelete(client.Login); exists {
-		log.Printf("Client unregistered: %s (total: %d)", client.Login, h.GetClientCount())
-	}
+	h.clients.LoadAndDelete(client.UserID)
+	log.Printf("WS client unregistered: userID=%d", client.UserID)
 }
 
-// broadcastMessage рассылает сообщение получателям
 func (h *Hub) broadcastMessage(msg *BroadcastMessage) {
-	for _, recipient := range msg.Recipients {
-		if client, ok := h.clients.Load(recipient); ok {
-			if c, ok := client.(*Client); ok {
+	for _, uid := range msg.Recipients {
+		if v, ok := h.clients.Load(uid); ok {
+			if c, ok := v.(*Client); ok {
 				select {
 				case c.send <- msg.Message:
-					// Сообщение отправлено
 				default:
-					// Канал переполнен, пропускаем
-					log.Printf("Warning: send buffer full for %s", recipient)
+					log.Printf("Warning: send buffer full for userID=%d", uid)
 				}
 			}
 		}
 	}
 }
 
-// SendToUser отправляет сообщение конкретному пользователю
-func (h *Hub) SendToUser(login string, message models.WSMessage) {
-	if client, ok := h.clients.Load(login); ok {
-		if c, ok := client.(*Client); ok {
-			select {
-			case c.send <- message:
-			default:
-				log.Printf("Warning: failed to send to %s (buffer full)", login)
-			}
-		}
-	}
-}
-
-// SendToUsers отправляет сообщение нескольким пользователям
-func (h *Hub) SendToUsers(logins []string, message models.WSMessage) {
+func (h *Hub) SendToUsers(userIDs []int, message models.WSMessage) {
 	h.broadcast <- &BroadcastMessage{
-		Recipients: logins,
+		Recipients: userIDs,
 		Message:    message,
 	}
 }
 
-// HandleMessage обрабатывает входящее сообщение от клиента
+func (h *Hub) SendToUser(userID int, message models.WSMessage) {
+	h.SendToUsers([]int{userID}, message)
+}
+
+// HandleMessage — WS принимает только ping/typing, не сообщения
 func (h *Hub) HandleMessage(client *Client, msg models.WSMessage) {
 	switch msg.Event {
-	case "message:send":
-		h.handleSendMessage(client, msg)
 	case "typing:start":
-		h.handleTypingStart(client, msg)
+		h.handleTyping(client, msg, "typing:start")
 	case "typing:stop":
-		h.handleTypingStop(client, msg)
+		h.handleTyping(client, msg, "typing:stop")
 	default:
-		log.Printf("Unknown event: %s from %s", msg.Event, client.Login)
+		log.Printf("Unknown WS event: %s from userID=%d", msg.Event, client.UserID)
 	}
 }
 
-// handleSendMessage обрабатывает отправку сообщения
-func (h *Hub) handleSendMessage(client *Client, msg models.WSMessage) {
-	// Парсинг данных
-	data, ok := msg.Data.(map[string]interface{})
-	if !ok {
-		log.Printf("Invalid message data from %s", client.Login)
-		return
-	}
-
-	chatID, _ := data["chatId"].(string)
-	text, _ := data["text"].(string)
-
-	// Валидация
-	sendReq := models.SendMessageRequest{
-		ChatID: chatID,
-		Text:   text,
-	}
-	if err := sendReq.Validate(); err != nil {
-		client.SendError("validation_error", err.Error())
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Получение участников чата
-	members, err := h.db.GetChatMembers(ctx, chatID)
-	if err != nil {
-		log.Printf("Error getting chat members: %v", err)
-		client.SendError("database_error", "Failed to get chat members")
-		return
-	}
-
-	if len(members) == 0 {
-		client.SendError("chat_not_found", "Chat not found")
-		return
-	}
-
-	// Проверка что отправитель является участником
-	isMember := false
-	for _, member := range members {
-		if member == client.Login {
-			isMember = true
-			break
-		}
-	}
-	if !isMember {
-		client.SendError("forbidden", "You are not a member of this chat")
-		return
-	}
-
-	// Сохранение сообщения
-	messageID, err := h.db.SaveMessage(ctx, chatID, client.Login, text)
-	if err != nil {
-		log.Printf("Error saving message: %v", err)
-		client.SendError("database_error", "Failed to save message")
-		return
-	}
-
-	// Активация чата (если это первое сообщение)
-	activated, err := h.db.ActivateChat(ctx, chatID)
-	if err != nil {
-		log.Printf("Error activating chat: %v", err)
-	}
-
-	// Уведомление об активации
-	if activated {
-		activationMsg := models.WSMessage{
-			Event: "chat:created",
-			Data: map[string]string{
-				"chatId": chatID,
-			},
-		}
-		h.SendToUsers(members, activationMsg)
-	}
-
-	// Рассылка сообщения всем участникам
-	newMessageEvent := models.WSMessage{
-		Event: "message:new",
-		Data: map[string]interface{}{
-			"id":        messageID,
-			"chatId":    chatID,
-			"from":      client.Login,
-			"text":      text,
-			"createdAt": time.Now().Format(time.RFC3339),
-		},
-	}
-	h.SendToUsers(members, newMessageEvent)
-}
-
-// handleTypingStart обрабатывает начало набора текста
-func (h *Hub) handleTypingStart(client *Client, msg models.WSMessage) {
+func (h *Hub) handleTyping(client *Client, msg models.WSMessage, event string) {
 	data, ok := msg.Data.(map[string]interface{})
 	if !ok {
 		return
 	}
-
 	chatID, _ := data["chatId"].(string)
 	if chatID == "" {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	// Получаем участников и шлём всем кроме отправителя
+	// Используем короткий контекст
+	import_ctx_cancel := func() {}
+	_ = import_ctx_cancel
 
-	members, err := h.db.GetChatMembers(ctx, chatID)
-	if err != nil {
-		return
-	}
-
-	// Отправка уведомления всем кроме отправителя
-	typingMsg := models.WSMessage{
-		Event: "typing:start",
-		Data: map[string]string{
-			"chatId": chatID,
-			"from":   client.Login,
-		},
-	}
-
-	for _, member := range members {
-		if member != client.Login {
-			h.SendToUser(member, typingMsg)
-		}
-	}
-}
-
-// handleTypingStop обрабатывает окончание набора текста
-func (h *Hub) handleTypingStop(client *Client, msg models.WSMessage) {
-	data, ok := msg.Data.(map[string]interface{})
-	if !ok {
-		return
-	}
-
-	chatID, _ := data["chatId"].(string)
-	if chatID == "" {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	members, err := h.db.GetChatMembers(ctx, chatID)
+	members, err := h.db.GetChatMembers(ctxBackground(), chatID)
 	if err != nil {
 		return
 	}
 
 	typingMsg := models.WSMessage{
-		Event: "typing:stop",
-		Data: map[string]string{
-			"chatId": chatID,
-			"from":   client.Login,
-		},
+		Event: event,
+		Data:  map[string]interface{}{"chatId": chatID, "fromId": client.UserID},
 	}
-
-	for _, member := range members {
-		if member != client.Login {
-			h.SendToUser(member, typingMsg)
+	for _, uid := range members {
+		if uid != client.UserID {
+			h.SendToUser(uid, typingMsg)
 		}
 	}
 }
 
-// GetClientCount возвращает количество подключенных клиентов
-func (h *Hub) GetClientCount() int {
-	count := 0
-	h.clients.Range(func(_, _ interface{}) bool {
-		count++
-		return true
-	})
-	return count
-}
-
-// IsUserOnline проверяет онлайн ли пользователь
-func (h *Hub) IsUserOnline(login string) bool {
-	_, exists := h.clients.Load(login)
+func (h *Hub) IsUserOnline(userID int) bool {
+	_, exists := h.clients.Load(userID)
 	return exists
 }
 
-// Shutdown корректно завершает работу hub
-func (h *Hub) Shutdown() {
-	log.Println("Shutting down WebSocket hub...")
-	close(h.shutdown)
-	h.wg.Wait()
-	log.Println("WebSocket hub shutdown complete")
+func (h *Hub) GetClientCount() int {
+	count := 0
+	h.clients.Range(func(_, _ interface{}) bool { count++; return true })
+	return count
 }
 
-// shutdownAllClients закрывает все клиентские соединения
+func (h *Hub) Shutdown() {
+	close(h.shutdown)
+	h.wg.Wait()
+}
+
 func (h *Hub) shutdownAllClients() {
-	h.clients.Range(func(key, value interface{}) bool {
-		if client, ok := value.(*Client); ok {
-			client.Close()
+	h.clients.Range(func(_, v interface{}) bool {
+		if c, ok := v.(*Client); ok {
+			c.Close()
 		}
 		return true
 	})

@@ -164,6 +164,36 @@ func (d *Database) GetUserByLogin(ctx context.Context, login string) (models.Use
 	return u, nil
 }
 
+// GetUserByID возвращает пользователя по числовому ID
+func (d *Database) GetUserByID(ctx context.Context, id int) (models.User, error) {
+	query := `
+		SELECT id, login, name, email, info, picture, created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`
+
+	var u models.User
+	err := d.db.QueryRowContext(ctx, query, id).Scan(
+		&u.ID,
+		&u.Login,
+		&u.Name,
+		&u.Email,
+		&u.Info,
+		&u.Picture,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return models.User{}, fmt.Errorf("user not found: id=%d", id)
+		}
+		return models.User{}, fmt.Errorf("failed to get user by id: %w", err)
+	}
+
+	return u, nil
+}
+
 // CreateUser создает нового пользователя
 func (d *Database) CreateUser(ctx context.Context, user models.User) error {
 	query := `

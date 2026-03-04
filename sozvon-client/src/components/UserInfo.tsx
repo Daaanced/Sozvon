@@ -1,10 +1,9 @@
-//sozvon-client\src\components\UserInfo.tsx
-
+// sozvon-client/src/components/UserInfo.tsx
 import { useLocation } from 'react-router-dom'
-import { useChatContext } from '../context/ChatContext'
+import { useChatContext, DELETED_USER } from '../context/ChatContext'
 
 export default function UserInfo() {
-  const { chats, users, myLogin } = useChatContext()
+  const { chats, myId, getSafeUser } = useChatContext()
   const location = useLocation()
 
   const chatId = location.pathname.split('/').pop()
@@ -14,12 +13,9 @@ export default function UserInfo() {
     return <div style={{ padding: 16 }}>Select a chat</div>
   }
 
-  const withLogin = chat.members.find(m => m !== myLogin)
-  const user = withLogin ? users[withLogin] : null
-
-  if (!user) {
-    return <div style={{ padding: 16 }}>Loading...</div>
-  }
+  const withId = chat.members.find(m => m !== myId)
+  // Если собеседник не найден — показываем DELETED_USER
+  const user = withId ? getSafeUser(withId) : DELETED_USER
 
   return (
     <div style={{ padding: 16 }}>
@@ -27,12 +23,7 @@ export default function UserInfo() {
         {user.picture ? (
           <img
             src={user.picture}
-            style={{
-              width: 100,
-              height: 100,
-              borderRadius: '50%',
-              objectFit: 'cover'
-            }}
+            style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover' }}
           />
         ) : (
           <div>{user.login[0].toUpperCase()}</div>
@@ -43,42 +34,7 @@ export default function UserInfo() {
       <div><b>Name:</b> {user.name}</div>
       <div><b>Email:</b> {user.email || '-'}</div>
       <div><b>Info:</b> {user.info || '-'}</div>
-      <div>
-        <b>Created:</b> {new Date(user.created_at).toLocaleString()}
-      </div>
+      <div><b>Created:</b> {new Date(user.created_at).toLocaleString()}</div>
     </div>
   )
 }
-
-
-// const styles = {
-//   container: {
-//     padding: 16,
-//     display: 'flex',
-//     flexDirection: 'column' as const,
-//     gap: 10,
-//   },
-//   empty: {
-//     padding: 16,
-//     color: '#777'
-//   },
-//   avatar: {
-//     width: 100,
-//     height: 100,
-//     borderRadius: '50%',
-//     background: '#ddd',
-//     overflow: 'hidden',
-//     display: 'flex',
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     marginBottom: 12
-//   },
-//   avatarImg: {
-//     width: '100%',
-//     height: '100%',
-//     objectFit: 'cover' as const,
-//   },
-//   field: {
-//     fontSize: 14
-//   }
-// }

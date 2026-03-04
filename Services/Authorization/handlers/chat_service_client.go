@@ -31,12 +31,12 @@ func NewChatServiceClient(cfg config.ChatServiceConfig) *ChatServiceClient {
 	}
 }
 
-// DeleteChatMembersByLogin удаляет все записи пользователя из chat_members
-func (c *ChatServiceClient) DeleteChatMembersByLogin(ctx context.Context, login string) error {
+// DeleteChatMembersByUserID удаляет все записи пользователя из chat_members
+func (c *ChatServiceClient) DeleteChatMembersByUserID(ctx context.Context, userID int) error {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"DELETE",
-		fmt.Sprintf("%s/internal/members/%s", c.baseURL, login),
+		fmt.Sprintf("%s/internal/members/%d", c.baseURL, userID),
 		nil,
 	)
 	if err != nil {

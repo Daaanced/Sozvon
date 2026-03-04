@@ -90,7 +90,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Password: hashedPassword,
 	}
 
-	if err := h.db.CreateUser(ctx, user); err != nil {
+	userID, err := h.db.CreateUser(ctx, user)
+	if err != nil {
 		log.Printf("Error creating user in database: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to create user")
 		return
@@ -110,7 +111,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерация JWT токена
-	token, err := h.jwtService.GenerateToken(req.Login)
+	token, err := h.jwtService.GenerateToken(req.Login, userID)
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "token_error", "Failed to generate token")
@@ -143,21 +144,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Получение пользователя из БД
+	// Login — GetUserByLogin теперь возвращает *models.User с ID
 	user, err := h.db.GetUserByLogin(ctx, req.Login)
 	if err != nil {
-		// Не раскрываем, существует ли пользователь
 		respondWithError(w, http.StatusUnauthorized, "invalid_credentials", "Invalid login or password")
 		return
 	}
 
-	// Проверка пароля
 	if err := h.passwordHasher.Compare(user.Password, req.Password); err != nil {
 		respondWithError(w, http.StatusUnauthorized, "invalid_credentials", "Invalid login or password")
 		return
 	}
 
-	// Генерация JWT токена
-	token, err := h.jwtService.GenerateToken(user.Login)
+	token, err := h.jwtService.GenerateToken(user.Login, user.ID) // ← передаём user.ID
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "token_error", "Failed to generate token")
@@ -204,53 +203,35 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	login := mux.Vars(r)["login"]
 
-	log.Printf("Deleting user: %s", login)
-
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	// 1. Проверка существования в Authorization Service
-	exists, err := h.db.UserExists(ctx, login)
+	// 1. Получаем пользователя (нужен id для Chat Service)
+	user, err := h.db.GetUserByLogin(ctx, login)
 	if err != nil {
-		log.Printf("Error checking user existence: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to check user existence")
-		return
-	}
-
-	if !exists {
 		respondWithError(w, http.StatusNotFound, "user_not_found", "User not found")
 		return
 	}
 
 	// 2. Удалить из User Service
-	log.Printf("Deleting user profile from User Service: %s", login)
 	if err := h.userService.DeleteUserProfile(ctx, login); err != nil {
 		log.Printf("Warning: failed to delete user profile: %v", err)
-	} else {
-		log.Printf("✅ User profile deleted from User Service: %s", login)
 	}
 
-	// 2.5. Удалить записи из chat_members в Chat Service  ← новый шаг
-	log.Printf("Deleting chat members records for: %s", login)
-	if err := h.chatService.DeleteChatMembersByLogin(ctx, login); err != nil {
+	// 3. Удалить из Chat Service по user_id
+	if err := h.chatService.DeleteChatMembersByUserID(ctx, user.ID); err != nil {
 		log.Printf("Warning: failed to delete chat members: %v", err)
-	} else {
-		log.Printf("✅ Chat members records deleted for: %s", login)
 	}
 
-	// 3. Удалить из Authorization Service
-	log.Printf("Deleting user from Authorization Service: %s", login)
+	// 4. Удалить из auth БД
 	if err := h.db.DeleteUser(ctx, login); err != nil {
-		log.Printf("Error deleting user from auth DB: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to delete user")
 		return
 	}
-	log.Printf("✅ User deleted from Authorization Service: %s", login)
 
-	// ✅ Успех
 	respondWithJSON(w, http.StatusOK, models.SuccessResponse{
 		Status:  "ok",
-		Message: "User deleted successfully from all services",
+		Message: "User deleted successfully",
 	})
 }
 

@@ -134,45 +134,32 @@ func (d *Database) Migrate() error {
 	return nil
 }
 
-// CreateUser создает нового пользователя
-func (d *Database) CreateUser(ctx context.Context, user models.User) error {
-	query := `
-		INSERT INTO users (login, password, created_at, updated_at) 
-		VALUES ($1, $2, NOW(), NOW())
-	`
-
-	_, err := d.db.ExecContext(ctx, query, user.Login, user.Password)
+// CreateUser создаёт пользователя и возвращает его id
+func (d *Database) CreateUser(ctx context.Context, user models.User) (int, error) {
+	var id int
+	err := d.db.QueryRowContext(ctx,
+		`INSERT INTO users (login, password) VALUES ($1, $2) RETURNING id`,
+		user.Login, user.Password,
+	).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+		return 0, fmt.Errorf("failed to create user: %w", err)
 	}
-
-	return nil
+	return id, nil
 }
 
-// GetUserByLogin возвращает пользователя по логину
-func (d *Database) GetUserByLogin(ctx context.Context, login string) (models.User, error) {
-	query := `
-		SELECT id, login, password, created_at, updated_at 
-		FROM users 
-		WHERE login = $1
-	`
-
-	var user models.User
-	err := d.db.QueryRowContext(ctx, query, login).Scan(
-		&user.ID,
-		&user.Login,
-		&user.Password,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return models.User{}, fmt.Errorf("user not found: %s", login)
-		}
-		return models.User{}, fmt.Errorf("failed to get user: %w", err)
+// GetUserByLogin возвращает пользователя по логину (включая id)
+func (d *Database) GetUserByLogin(ctx context.Context, login string) (*models.User, error) {
+	user := &models.User{}
+	err := d.db.QueryRowContext(ctx,
+		`SELECT id, login, password FROM users WHERE login = $1`,
+		login,
+	).Scan(&user.ID, &user.Login, &user.Password)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found")
 	}
-
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
 	return user, nil
 }
 

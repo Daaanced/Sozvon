@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { searchUser } from '../api/users'
 import UserSearchResult from '../components/UserSearchResult'
 import { useNavigate } from 'react-router-dom'
-import { parseToken } from '../functions/parse'
+import { createChat } from '../api/chats'
 
 export default function Main() {
   const [query, setQuery] = useState('')
@@ -14,11 +14,9 @@ export default function Main() {
 
   async function handleSearch() {
     if (!query) return
-
     setLoading(true)
     setError('')
     setUser(null)
-
     try {
       const result = await searchUser(query)
       setUser(result)
@@ -29,27 +27,10 @@ export default function Main() {
     }
   }
 
-  async function handleChat(userLogin: string) {
+  async function handleChat(toUserId: number) {
     try {
-      const token = localStorage.getItem('token')!
-      const loginFromToken = parseToken(token)
-
-      const res = await fetch('http://92.127.177.190:8080/chats/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: loginFromToken!
-        },
-        body: JSON.stringify({
-          from: loginFromToken,
-          to: userLogin
-        })
-      })
-
-      const chat = await res.json()
-
-		navigate(`/app/chats/${chat.id}`)
-
+      const chat = await createChat(toUserId)
+      navigate(`/app/chats/${chat.id}`)
     } catch (err) {
       console.error(err)
     }
@@ -58,24 +39,20 @@ export default function Main() {
   return (
     <div>
       <h3>Search user</h3>
-
       <input
         placeholder="Login"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
       />
-
       <button onClick={handleSearch}>Search</button>
-
       {loading && <p>Searching...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
-
       {user && (
         <UserSearchResult
           login={user.login}
           picture={user.picture}
-          onChat={() => handleChat(user.login)}
+          onChat={() => handleChat(user.id)}  // ← передаём user.id (int)
           onCall={() => console.log('Call', user.login)}
         />
       )}

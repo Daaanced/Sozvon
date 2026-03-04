@@ -13,64 +13,52 @@ var (
 	ErrInvalidMembers = errors.New("invalid chat members")
 )
 
-const (
-	MaxMessageLength = 4000 // Максимальная длина сообщения
-)
+const MaxMessageLength = 4000
 
-// Chat представляет чат
 type Chat struct {
 	ID        string    `json:"id"`
-	Members   []string  `json:"members"`
+	Members   []int     `json:"members"` // user IDs
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ChatListItem элемент списка чатов
 type ChatListItem struct {
 	ChatID      string    `json:"chatId"`
-	Members     []string  `json:"members"`
+	Members     []int     `json:"members"` // user IDs
 	LastMessage string    `json:"lastMessage"`
-	UnreadCount int       `json:"unreadCount,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// Message представляет сообщение
 type Message struct {
-	ID          string    `json:"id"`
-	ChatID      string    `json:"chatId"`
-	SenderLogin string    `json:"from"`
-	Text        string    `json:"text"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID        string    `json:"id"`
+	ChatID    string    `json:"chatId"`
+	SenderID  int       `json:"senderId"` // user ID
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
-// CreateChatRequest запрос на создание чата
+// CreateChatRequest — from/to теперь user_id
 type CreateChatRequest struct {
-	From string `json:"from" validate:"required"`
-	To   string `json:"to" validate:"required"`
+	FromID int `json:"from_id"`
+	ToID   int `json:"to_id"`
 }
 
-// Validate валидирует запрос создания чата
 func (r *CreateChatRequest) Validate() error {
-	if r.From == "" || r.To == "" {
+	if r.FromID == 0 || r.ToID == 0 {
 		return ErrInvalidMembers
 	}
-	if r.From == r.To {
+	if r.FromID == r.ToID {
 		return errors.New("cannot create chat with yourself")
 	}
 	return nil
 }
 
-// SendMessageRequest запрос на отправку сообщения
+// SendMessageRequest — REST тело для отправки сообщения
 type SendMessageRequest struct {
-	ChatID string `json:"chatId"`
-	Text   string `json:"text"`
+	Text string `json:"text"`
 }
 
-// Validate валидирует запрос отправки сообщения
 func (r *SendMessageRequest) Validate() error {
-	if r.ChatID == "" {
-		return ErrInvalidChatID
-	}
 	if r.Text == "" {
 		return ErrEmptyMessage
 	}
@@ -80,26 +68,17 @@ func (r *SendMessageRequest) Validate() error {
 	return nil
 }
 
-// WSMessage структура WebSocket сообщения
+// WSMessage — только для push-уведомлений
 type WSMessage struct {
 	Event string      `json:"event"`
 	Data  interface{} `json:"data"`
 }
 
-// WSMessageData данные WebSocket сообщения
-type WSMessageData struct {
-	ChatID string `json:"chatId"`
-	Text   string `json:"text"`
-	From   string `json:"from,omitempty"`
-}
-
-// ErrorResponse структура для ошибок
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message,omitempty"`
 }
 
-// SuccessResponse структура успешного ответа
 type SuccessResponse struct {
 	Status  string      `json:"status"`
 	Message string      `json:"message,omitempty"`

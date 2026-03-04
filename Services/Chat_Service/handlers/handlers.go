@@ -25,7 +25,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// ChatHandler обрабатывает запросы чатов
 type ChatHandler struct {
 	config     *config.Config
 	db         *db.Database
@@ -33,7 +32,6 @@ type ChatHandler struct {
 	jwtService *auth.JWTService
 }
 
-// NewChatHandler создает новый обработчик чатов
 func NewChatHandler(cfg *config.Config, database *db.Database, hub *ws.Hub) *ChatHandler {
 	return &ChatHandler{
 		config:     cfg,
@@ -43,61 +41,121 @@ func NewChatHandler(cfg *config.Config, database *db.Database, hub *ws.Hub) *Cha
 	}
 }
 
-// RegisterRoutes регистрирует маршруты
 func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/ws", h.HandleWebSocket)
 	r.HandleFunc("/chats/create", h.CreateChat).Methods("POST", "OPTIONS")
 	r.HandleFunc("/chats", h.GetChats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
+	r.HandleFunc("/chats/{chatId}/messages", h.SendMessage).Methods("POST", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}", h.GetChatInfo).Methods("GET", "OPTIONS")
-	r.HandleFunc("/internal/members/{login}", h.DeleteMembersByLogin).Methods("DELETE")
+	r.HandleFunc("/internal/members/{userId}", h.DeleteMembersByUserID).Methods("DELETE")
 }
 
-// HandleWebSocket обрабатывает WebSocket подключения
+// HandleWebSocket — теперь идентифицируем по UserID из JWT
 func (h *ChatHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	var login string
-
-	// Получаем token из query параметра
 	token := r.URL.Query().Get("token")
-	if token != "" {
-		// Валидируем JWT
-		claims, err := h.jwtService.ValidateToken(token)
-		if err != nil {
-			log.Printf("JWT validation error: %v", err)
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-		login = claims.Login
-	}
-
-	// Upgrade до WebSocket
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+	if token == "" {
+		http.Error(w, "token required", http.StatusUnauthorized)
 		return
 	}
 
-	conn.SetReadLimit(h.config.WebSocket.MaxMessageSize)
+	claims, err := h.jwtService.ValidateToken(token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
 
-	// Создание клиента
-	client := ws.NewClient(h.hub, conn, login)
+	userID, err := strconv.Atoi(claims.UserID)
+	if err != nil || userID == 0 {
+		http.Error(w, "invalid user_id in token", http.StatusUnauthorized)
+		return
+	}
 
-	// Регистрация в hub
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WS upgrade error: %v", err)
+		return
+	}
+
+	client := ws.NewClient(h.hub, conn, userID)
 	h.hub.Register <- client
-
-	// Запуск обработки
 	client.Start()
 }
 
-// CreateChat создает новый чат
+// CreateChat — принимает from_id / to_id
 func (h *ChatHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
-	var req models.CreateChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON format")
+	// from_id — из токена, не из тела
+	fromID, err := h.extractUserIDFromAuth(r)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
 	}
 
-	// Валидация
+	var body struct {
+		ToID int `json:"to_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ToID == 0 {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "to_id required")
+		return
+	}
+
+	if fromID == body.ToID {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "cannot create chat with yourself")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	existingID, err := h.db.FindExistingChat(ctx, fromID, body.ToID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to find chat")
+		return
+	}
+
+	if existingID != "" {
+		respondWithJSON(w, http.StatusOK, models.Chat{
+			ID:      existingID,
+			Members: []int{fromID, body.ToID},
+			Active:  true,
+		})
+		return
+	}
+
+	chatID, err := h.db.CreateChat(ctx, []int{fromID, body.ToID}, true)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to create chat")
+		return
+	}
+
+	h.hub.SendToUsers([]int{fromID, body.ToID}, models.WSMessage{
+		Event: "chat:created",
+		Data:  map[string]string{"chatId": chatID},
+	})
+
+	log.Printf("Chat created: %s [%d, %d]", chatID, fromID, body.ToID)
+	respondWithJSON(w, http.StatusCreated, models.Chat{
+		ID:      chatID,
+		Members: []int{fromID, body.ToID},
+		Active:  true,
+	})
+}
+
+// SendMessage — POST /chats/{chatId}/messages
+func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
+	chatID := mux.Vars(r)["chatId"]
+
+	userID, err := h.extractUserIDFromAuth(r)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
+		return
+	}
+
+	var req models.SendMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON")
+		return
+	}
 	if err := req.Validate(); err != nil {
 		respondWithError(w, http.StatusBadRequest, "validation_error", err.Error())
 		return
@@ -106,55 +164,54 @@ func (h *ChatHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	// Проверка существующего чата
-	existingChatID, err := h.db.FindExistingChat(ctx, req.From, req.To)
+	// Проверка членства
+	isMember, err := h.db.IsMember(ctx, chatID, userID)
 	if err != nil {
-		log.Printf("Error finding chat: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to find chat")
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to check membership")
+		return
+	}
+	if !isMember {
+		respondWithError(w, http.StatusForbidden, "forbidden", "You are not a member of this chat")
 		return
 	}
 
-	var chatID string
-	var isNew bool
-
-	if existingChatID != "" {
-		chatID = existingChatID
-		isNew = false
-	} else {
-		// Создание нового чата
-		chatID, err = h.db.CreateChat(ctx, []string{req.From, req.To}, true)
-		if err != nil {
-			log.Printf("Error creating chat: %v", err)
-			respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to create chat")
-			return
-		}
-		isNew = true
-
-		// Уведомление участников через WebSocket
-		notification := models.WSMessage{
-			Event: "chat:created",
-			Data: map[string]string{
-				"chatId": chatID,
-			},
-		}
-		h.hub.SendToUsers([]string{req.From, req.To}, notification)
+	// Сохранение
+	msg, err := h.db.SaveMessage(ctx, chatID, userID, req.Text)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to save message")
+		return
 	}
 
-	respondWithJSON(w, http.StatusOK, models.Chat{
-		ID:      chatID,
-		Members: []string{req.From, req.To},
-		Active:  true,
-	})
-
-	if isNew {
-		log.Printf("Chat created: %s [%s, %s]", chatID, req.From, req.To)
+	// Активация чата при первом сообщении
+	if activated, _ := h.db.ActivateChat(ctx, chatID); activated {
+		members, _ := h.db.GetChatMembers(ctx, chatID)
+		h.hub.SendToUsers(members, models.WSMessage{
+			Event: "chat:activated",
+			Data:  map[string]string{"chatId": chatID},
+		})
 	}
+
+	// Push всем участникам кроме отправителя
+	members, err := h.db.GetChatMembers(ctx, chatID)
+	if err == nil {
+		recipients := make([]int, 0, len(members)-1)
+		for _, uid := range members {
+			if uid != userID {
+				recipients = append(recipients, uid)
+			}
+		}
+		h.hub.SendToUsers(recipients, models.WSMessage{
+			Event: "message:new",
+			Data:  msg,
+		})
+	}
+
+	respondWithJSON(w, http.StatusCreated, msg)
 }
 
-// GetChats возвращает список чатов пользователя
+// GetChats — требует Authorization header
 func (h *ChatHandler) GetChats(w http.ResponseWriter, r *http.Request) {
-	// Извлечение login из JWT
-	login, err := h.extractLoginFromAuth(r)
+	userID, err := h.extractUserIDFromAuth(r)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
@@ -163,9 +220,8 @@ func (h *ChatHandler) GetChats(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	chats, err := h.db.GetUserChats(ctx, login)
+	chats, err := h.db.GetUserChats(ctx, userID)
 	if err != nil {
-		log.Printf("Error getting chats: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to get chats")
 		return
 	}
@@ -173,39 +229,27 @@ func (h *ChatHandler) GetChats(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, chats)
 }
 
-// GetMessages возвращает сообщения чата
+// GetMessages — GET /chats/{chatId}/messages
 func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	chatID := vars["chatId"]
-
+	chatID := mux.Vars(r)["chatId"]
 	if chatID == "" {
 		respondWithError(w, http.StatusBadRequest, "invalid_request", "Chat ID required")
 		return
 	}
 
-	// Пагинация
 	limit, offset := h.getPaginationParams(r)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	// Проверка существования чата
 	exists, err := h.db.ChatExists(ctx, chatID)
-	if err != nil {
-		log.Printf("Error checking chat existence: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to check chat")
-		return
-	}
-
-	if !exists {
+	if err != nil || !exists {
 		respondWithError(w, http.StatusNotFound, "chat_not_found", "Chat not found")
 		return
 	}
 
-	// Получение сообщений
 	messages, err := h.db.GetChatMessages(ctx, chatID, limit, offset)
 	if err != nil {
-		log.Printf("Error getting messages: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to get messages")
 		return
 	}
@@ -213,62 +257,22 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, messages)
 }
 
-// DeleteMembersByLogin удаляет все записи пользователя из chat_members (internal endpoint)
-func (h *ChatHandler) DeleteMembersByLogin(w http.ResponseWriter, r *http.Request) {
-	login := mux.Vars(r)["login"]
-	if login == "" {
-		respondWithError(w, http.StatusBadRequest, "invalid_request", "Login required")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	rowsAffected, err := h.db.DeleteChatMembersByLogin(ctx, login)
-	if err != nil {
-		log.Printf("Error deleting chat members for login %s: %v", login, err)
-		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to delete chat members")
-		return
-	}
-
-	log.Printf("Deleted %d chat_members records for login: %s", rowsAffected, login)
-
-	respondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"login":         login,
-		"rows_affected": rowsAffected,
-	})
-}
-
-// GetChatInfo возвращает информацию о чате
+// GetChatInfo — участники и онлайн-статус
 func (h *ChatHandler) GetChatInfo(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	chatID := vars["chatId"]
-
-	if chatID == "" {
-		respondWithError(w, http.StatusBadRequest, "invalid_request", "Chat ID required")
-		return
-	}
+	chatID := mux.Vars(r)["chatId"]
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
-	// Получение участников
 	members, err := h.db.GetChatMembers(ctx, chatID)
-	if err != nil {
-		log.Printf("Error getting chat info: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to get chat info")
-		return
-	}
-
-	if len(members) == 0 {
+	if err != nil || len(members) == 0 {
 		respondWithError(w, http.StatusNotFound, "chat_not_found", "Chat not found")
 		return
 	}
 
-	// Проверка онлайн статуса участников
-	onlineStatus := make(map[string]bool)
-	for _, member := range members {
-		onlineStatus[member] = h.hub.IsUserOnline(member)
+	onlineStatus := make(map[int]bool, len(members))
+	for _, uid := range members {
+		onlineStatus[uid] = h.hub.IsUserOnline(uid)
 	}
 
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
@@ -278,42 +282,62 @@ func (h *ChatHandler) GetChatInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --- Вспомогательные функции ---
-
-// extractLoginFromAuth извлекает login из Authorization header
-func (h *ChatHandler) extractLoginFromAuth(r *http.Request) (string, error) {
-	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, "Bearer ") {
-		return "", fmt.Errorf("missing or invalid authorization header")
+// DeleteMembersByUserID — internal endpoint
+func (h *ChatHandler) DeleteMembersByUserID(w http.ResponseWriter, r *http.Request) {
+	userIDStr := mux.Vars(r)["userId"]
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil || userID == 0 {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Valid user ID required")
+		return
 	}
 
-	token := strings.TrimPrefix(auth, "Bearer ")
-	claims, err := h.jwtService.ValidateToken(token)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	rows, err := h.db.DeleteChatMembersByUserID(ctx, userID)
 	if err != nil {
-		return "", fmt.Errorf("invalid token: %w", err)
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to delete members")
+		return
 	}
 
-	return claims.Login, nil
+	log.Printf("Deleted %d chat_members for userID=%d", rows, userID)
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"userId":       userID,
+		"rowsAffected": rows,
+	})
 }
 
-// getPaginationParams извлекает параметры пагинации
+// --- helpers ---
+
+func (h *ChatHandler) extractUserIDFromAuth(r *http.Request) (int, error) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return 0, fmt.Errorf("missing or invalid authorization header")
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := h.jwtService.ValidateToken(token)
+	if err != nil {
+		return 0, fmt.Errorf("invalid token: %w", err)
+	}
+
+	userID, err := strconv.Atoi(claims.UserID)
+	if err != nil || userID == 0 {
+		return 0, fmt.Errorf("invalid user_id in token")
+	}
+
+	return userID, nil
+}
+
 func (h *ChatHandler) getPaginationParams(r *http.Request) (limit, offset int) {
-	limit = 50 // По умолчанию
-	offset = 0
-
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {
-			limit = l
-		}
+	limit = 50
+	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 200 {
+		limit = l
 	}
-
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
+	if o, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && o >= 0 {
+		offset = o
 	}
-
-	return limit, offset
+	return
 }
 
 func respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
@@ -323,8 +347,5 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{})
 }
 
 func respondWithError(w http.ResponseWriter, statusCode int, code, message string) {
-	respondWithJSON(w, statusCode, models.ErrorResponse{
-		Error:   code,
-		Message: message,
-	})
+	respondWithJSON(w, statusCode, models.ErrorResponse{Error: code, Message: message})
 }
