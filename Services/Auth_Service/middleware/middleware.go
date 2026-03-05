@@ -1,4 +1,4 @@
-// Authorization/middleware/middleware.go
+// Auth_Service/middleware/middleware.go
 package middleware
 
 import (
@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"Authorization/config"
+	"Auth_Service/config"
 )
 
 // Logging middleware для логирования HTTP запросов

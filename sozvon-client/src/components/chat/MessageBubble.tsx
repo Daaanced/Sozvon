@@ -15,6 +15,10 @@ function isImage(mimeType: string) {
   return mimeType.startsWith('image/')
 }
 
+function isVideo(mimeType: string) {
+  return mimeType.startsWith('video/')
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -32,8 +36,14 @@ function formatFullDate(dateString: string) {
 }
 
 export default function MessageBubble({ message: m, user, isGroupStart, onImageClick }: Props) {
+  const imageAttachments = m.attachments?.filter(a => isImage(a.mimeType)) ?? []
+  const videoAttachments = m.attachments?.filter(a => isVideo(a.mimeType)) ?? []
+  const fileAttachments  = m.attachments?.filter(a => !isImage(a.mimeType) && !isVideo(a.mimeType)) ?? []
+  const multipleImages   = imageAttachments.length > 1
+
   return (
     <div style={styles.groupStartWrapper}>
+
       {/* Левая колонка — аватар или время */}
       {isGroupStart ? (
         <img src={user.picture} style={styles.avatar} alt={user.name} />
@@ -43,8 +53,9 @@ export default function MessageBubble({ message: m, user, isGroupStart, onImageC
         </div>
       )}
 
-      {/* Правая колонка — контент */}
+      {/* Правая колонка */}
       <div style={styles.groupContent}>
+
         {isGroupStart && (
           <div style={styles.headerLine}>
             <span style={styles.userName}>{user.name}</span>
@@ -56,33 +67,56 @@ export default function MessageBubble({ message: m, user, isGroupStart, onImageC
           <div style={styles.messageText}>{m.text}</div>
         )}
 
-        {m.attachments && m.attachments.length > 0 && (
-  <div style={styles.attachments}>
-    {m.attachments.map(att => (
-      <div key={att.id}>
-        {isImage(att.mimeType) ? (
-          <img
+        {/* Изображения */}
+        {imageAttachments.length > 0 && (
+          <div style={{
+            ...styles.imageGrid,
+            gridTemplateColumns: multipleImages ? 'repeat(auto-fill, 80px)' : '1fr'
+          }}>
+            {imageAttachments.map(att => (
+              <img
+                key={att.id}
+                src={att.url}
+                alt={att.fileName}
+                title={att.fileName}
+                style={multipleImages ? styles.gridImage : styles.singleImage}
+                onClick={() => onImageClick(att.url)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Видео */}
+        {videoAttachments.map(att => (
+          <video
+            key={att.id}
             src={att.url}
-            alt={att.fileName}
-            style={styles.inlineImage}
-            onClick={() => onImageClick(att.url)}
+            controls
+            style={styles.inlineVideo}
             title={att.fileName}
           />
-        ) : (
-		<a
-			href={att.url}
-			download={att.fileName}
-			style={styles.fileLink}
-		>
-			<span style={styles.fileIcon}>📎</span>
-			<span style={styles.fileName}>{att.fileName}</span>
-			<span style={styles.fileSize}>{formatBytes(att.size)}</span>
-		</a>
-)}
-      </div>
-    ))}
-  </div>
-)}
+        ))}
+
+        {/* Файлы */}
+        {fileAttachments.length > 0 && (
+          <div style={styles.attachments}>
+            {fileAttachments.map(att => (
+              <div key={att.id}>
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={styles.fileLink}
+                >
+                  <span style={styles.fileIcon}>📎</span>
+                  <span style={styles.fileName}>{att.fileName}</span>
+                  <span style={styles.fileSize}>{formatBytes(att.size)}</span>
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-// Authorization/models/models.go
+// Auth_Service/models/models.go
 package models
 
 import "time"

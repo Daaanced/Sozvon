@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/google/uuid"
 )
@@ -35,9 +35,31 @@ type SavedFile struct {
 
 // Save сохраняет файл на диск, возвращает метаданные
 func (s *FileStorage) Save(file multipart.File, header *multipart.FileHeader) (*SavedFile, error) {
-	// Генерируем уникальное имя, сохраняем расширение
-	ext := filepath.Ext(header.Filename)
 	fileID := uuid.NewString()
+
+	// Читаем первые 512 байт для определения реального типа
+	buffer := make([]byte, 512)
+	n, err := file.Read(buffer)
+	if err != nil && err.Error() != "EOF" {
+		return nil, fmt.Errorf("failed to read file header: %w", err)
+	}
+
+	// Определяем реальный MIME по содержимому
+	detectedMime := http.DetectContentType(buffer[:n])
+
+	// Сбрасываем позицию обратно в начало
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, fmt.Errorf("failed to seek file: %w", err)
+	}
+
+	// Выбираем расширение по реальному MIME, не по заголовку
+	ext := mimeToExt(detectedMime)
+
+	// Если не распознали — берём из оригинального имени файла
+	if ext == "" {
+		ext = filepath.Ext(header.Filename)
+	}
+
 	storeName := fileID + ext
 
 	dstPath := filepath.Join(s.directory, storeName)
@@ -53,23 +75,40 @@ func (s *FileStorage) Save(file multipart.File, header *multipart.FileHeader) (*
 		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 
-	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-	// Берём только основной тип без параметров (например boundary)
-	if idx := strings.Index(mimeType, ";"); idx != -1 {
-		mimeType = strings.TrimSpace(mimeType[:idx])
-	}
-
 	return &SavedFile{
 		ID:       fileID,
 		FileName: header.Filename,
-		MimeType: mimeType,
+		MimeType: detectedMime,
 		Size:     size,
 		Path:     dstPath,
 		URL:      s.baseURL + "/media/" + storeName,
 	}, nil
+}
+
+// mimeToExt возвращает расширение по MIME-типу
+func mimeToExt(mime string) string {
+	switch mime {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/bmp":
+		return ".bmp"
+	case "video/mp4":
+		return ".mp4"
+	case "video/webm":
+		return ".webm"
+	case "application/pdf":
+		return ".pdf"
+	case "application/zip":
+		return ".zip"
+	default:
+		return ""
+	}
 }
 
 // Delete удаляет файл по storeName (fileID + ext)

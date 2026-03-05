@@ -1,4 +1,4 @@
-// Authorization/main.go
+// Auth_Service/main.go
 package main
 
 import (
@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"Authorization/config"
-	"Authorization/db"
-	"Authorization/handlers"
-	"Authorization/middleware"
+	"Auth_Service/config"
+	"Auth_Service/db"
+	"Auth_Service/handlers"
+	"Auth_Service/middleware"
 
 	"encoding/json"
 

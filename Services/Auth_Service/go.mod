@@ -1,4 +1,4 @@
-module Authorization
+module Auth_Service
 
 go 1.25.5
 

@@ -1,4 +1,4 @@
-// Authorization/handlers/handlers.go
+// Auth_Service/handlers/handlers.go
 package handlers
 
 import (
@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
-	"Authorization/auth"
-	"Authorization/config"
-	"Authorization/db"
-	"Authorization/models"
+	"Auth_Service/auth"
+	"Auth_Service/config"
+	"Auth_Service/db"
+	"Auth_Service/models"
 
 	"github.com/gorilla/mux"
 )

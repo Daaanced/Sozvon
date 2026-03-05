@@ -4,6 +4,8 @@ import { useRef, useCallback } from 'react'
 import { styles } from './chat.styles'
 import type { PendingFile } from './chat.types'
 
+const MAX_FILES = 4
+
 type Props = {
   text: string
   pendingFiles: PendingFile[]
@@ -19,33 +21,66 @@ export default function ChatInput({
   text, pendingFiles, uploading, uploadProgress,
   onTextChange, onSend, onFilesAdded, onFileRemove
 }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Фокус передаётся из Chat через ref — не нужен здесь
-  // Оставляем публичный метод через forwardRef если понадобится
+  const remaining = MAX_FILES - pendingFiles.length
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = Array.from(e.clipboardData.items)
-    const imageItems = items.filter(i => i.kind === 'file' && i.type.startsWith('image/'))
-    if (imageItems.length === 0) return
+const handlePaste = useCallback((e: React.ClipboardEvent) => {
+  const items = Array.from(e.clipboardData.items)
 
-    e.preventDefault()
-    const newFiles: PendingFile[] = imageItems.map(item => {
-      const file = item.getAsFile()!
-      return { file, previewUrl: URL.createObjectURL(file) }
+  // 1. Сначала проверяем HTML — там может быть прямая ссылка на GIF
+  const htmlItem = items.find(i => i.kind === 'string' && i.type === 'text/html')
+  if (htmlItem && remaining > 0) {
+    htmlItem.getAsString(async (html) => {
+      const match = html.match(/<img[^>]+src="([^"]+\.gif[^"]*)"/)
+      if (!match) return
+
+      e.preventDefault()
+      try {
+        const response = await fetch(match[1])
+        const blob = await response.blob()
+        const file = new File(
+          [blob],
+          `gif-${Date.now()}.gif`,
+          { type: 'image/gif' }
+        )
+        onFilesAdded([{ file, previewUrl: URL.createObjectURL(file) }])
+      } catch {
+        console.warn('Failed to fetch GIF:', match[1])
+      }
     })
-    onFilesAdded(newFiles)
-  }, [onFilesAdded])
+    // Выходим — GIF обрабатывается асинхронно выше
+    // PNG превью от Windows игнорируем
+    return
+  }
+
+  // 2. Обычные файлы — скриншоты, скопированные изображения
+  const fileItems = items.filter(
+    i => i.kind === 'file' && i.type.startsWith('image/')
+  )
+  if (fileItems.length === 0 || remaining <= 0) return
+
+  e.preventDefault()
+  const toAdd = fileItems.slice(0, remaining)
+  const newFiles: PendingFile[] = toAdd.map(item => {
+    const file = item.getAsFile()!
+    return { file, previewUrl: URL.createObjectURL(file) }
+  })
+  onFilesAdded(newFiles)
+
+}, [onFilesAdded, remaining])
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || [])
     if (selected.length === 0) return
+    if (remaining <= 0) return
 
-    const newFiles: PendingFile[] = selected.map(file => ({
+    const toAdd = selected.slice(0, remaining)
+    const newFiles: PendingFile[] = toAdd.map(file => ({
       file,
       previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     }))
+
     onFilesAdded(newFiles)
     e.target.value = ''
   }
@@ -72,6 +107,13 @@ export default function ChatInput({
               </button>
             </div>
           ))}
+
+          {/* Счётчик оставшихся слотов */}
+          {pendingFiles.length > 0 && (
+            <div style={styles.fileCounter}>
+              {pendingFiles.length}/{MAX_FILES}
+            </div>
+          )}
         </div>
       )}
 
@@ -89,21 +131,24 @@ export default function ChatInput({
           ref={fileInputRef}
           type="file"
           multiple
+          accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt"
           style={{ display: 'none' }}
           onChange={handleFileSelect}
         />
 
         <button
-          style={styles.attachBtn}
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          title="Attach files"
+          style={{
+            ...styles.attachBtn,
+            opacity: remaining <= 0 ? 0.4 : 1
+          }}
+          onClick={() => remaining > 0 && fileInputRef.current?.click()}
+          disabled={uploading || remaining <= 0}
+          title={remaining <= 0 ? `Max ${MAX_FILES} files` : 'Attach files'}
         >
           📎
         </button>
 
         <input
-          ref={inputRef}
           style={styles.textInput}
           value={text}
           maxLength={4000}
@@ -120,7 +165,10 @@ export default function ChatInput({
         />
 
         <button
-          style={styles.sendBtn}
+          style={{
+            ...styles.sendBtn,
+            opacity: (uploading || (!text.trim() && pendingFiles.length === 0)) ? 0.5 : 1
+          }}
           onClick={onSend}
           disabled={uploading || (!text.trim() && pendingFiles.length === 0)}
         >

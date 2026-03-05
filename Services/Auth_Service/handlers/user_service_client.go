@@ -1,4 +1,4 @@
-// Authorization/handlers/user_service_client.go
+// Auth_Service/handlers/user_service_client.go
 package handlers
 
 import (
@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"Authorization/config"
+	"Auth_Service/config"
 )
 
 // UserServiceClient клиент для взаимодействия с User Service

@@ -1,4 +1,4 @@
-// Authorization/db/db.go - ОБНОВЛЕННАЯ ВЕРСИЯ
+// Auth_Service/db/db.go - ОБНОВЛЕННАЯ ВЕРСИЯ
 package db
 
 import (
@@ -8,8 +8,8 @@ import (
 	"log"
 	"time"
 
-	"Authorization/config"
-	"Authorization/models"
+	"Auth_Service/config"
+	"Auth_Service/models"
 
 	_ "github.com/lib/pq"
 )

@@ -1,4 +1,4 @@
-// Authorization/config/config.go
+// Auth_Service/config/config.go
 package config
 
 import (

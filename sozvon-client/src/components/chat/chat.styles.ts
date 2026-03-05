@@ -4,12 +4,9 @@ import type React from 'react'
 export const styles: Record<string, React.CSSProperties> = {
   // Обёртка чата
   chatWrapper: {
-    display: 'flex', flexDirection: 'column',
-    height: '100%', maxWidth: 700, width: '100%', position: 'relative'
-  },
-  chatTitle: {
-    margin: '8px 0'
-  },
+  display: 'flex', flexDirection: 'column',
+  height: '100%', width: '100%', position: 'relative'
+},
 
   // Список сообщений
   messageList: {
@@ -57,6 +54,14 @@ export const styles: Record<string, React.CSSProperties> = {
     maxWidth: 320, maxHeight: 240, borderRadius: 8,
     objectFit: 'cover', cursor: 'zoom-in', display: 'block'
   },
+  inlineVideo: {
+  maxWidth: '60%',
+  maxHeight: 360,
+  borderRadius: 8,
+  display: 'block',
+  outline: 'none',
+  marginTop: 6,
+},
   fileLink: {
     display: 'inline-flex', alignItems: 'center', gap: 6,
     padding: '6px 10px', borderRadius: 8, background: '#f0f0f0',
@@ -148,5 +153,92 @@ export const styles: Record<string, React.CSSProperties> = {
     padding: '10px 18px', background: '#4a90e2', color: '#fff',
     border: 'none', borderRadius: 8, cursor: 'pointer',
     fontSize: 15, flexShrink: 0
+  },
+  // Сетка изображений
+imageGrid: {
+  display: 'grid',
+  gap: 4,
+  marginTop: 6,
+},
+// Одно изображение — крупное
+singleImage: {
+  maxWidth: '60%',
+  maxHeight: 360,
+  borderRadius: 8,
+  objectFit: 'cover' as const,
+  cursor: 'zoom-in',
+  display: 'block',
+},
+// Несколько изображений — квадратные thumbnail
+gridImage: {
+  width: 80,
+  height: 80,
+  borderRadius: 6,
+  objectFit: 'cover' as const,
+  cursor: 'zoom-in',
+  display: 'block',
+},
+// Счётчик файлов
+fileCounter: {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 12,
+  color: '#888',
+  padding: '0 4px',
+  alignSelf: 'center' as const,
+},
+  bar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 12px',
+    borderBottom: '1px solid #ddd',
+    background: '#fff',
+    flexShrink: 0,
+    gap: 8,
+  },
+  userInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    overflow: 'hidden',
+  },
+//   avatar: {
+//     width: 36,
+//     height: 36,
+//     borderRadius: '50%',
+//     objectFit: 'cover',
+//     flexShrink: 0,
+//   },
+//   userName: {
+//     fontWeight: 600,
+//     fontSize: 15,
+//     overflow: 'hidden',
+//     textOverflow: 'ellipsis',
+//     whiteSpace: 'nowrap',
+//   },
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  searchInput: {
+    padding: '6px 10px',
+    fontSize: 14,
+    border: '1px solid #ddd',
+    borderRadius: 8,
+    outline: 'none',
+    width: 200,
+  },
+  iconBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 18,
+    padding: '4px 6px',
+    borderRadius: 6,
+    lineHeight: 1,
   },
 }

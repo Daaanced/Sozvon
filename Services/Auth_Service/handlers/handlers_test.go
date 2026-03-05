@@ -1,4 +1,4 @@
-// Authorization/handlers/handlers_test.go
+// Auth_Service/handlers/handlers_test.go
 package handlers
 
 import (
@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"Authorization/auth"
-	"Authorization/config"
-	"Authorization/models"
+	"Auth_Service/auth"
+	"Auth_Service/config"
+	"Auth_Service/models"
 )
 
 // MockDatabase для тестирования

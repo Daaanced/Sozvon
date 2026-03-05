@@ -1,4 +1,4 @@
-// Authorization/auth/auth.go
+// Auth_Service/auth/auth.go
 package auth
 
 import (

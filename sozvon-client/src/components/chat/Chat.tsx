@@ -1,9 +1,11 @@
+//sozvon-client\src\components\chat\Chat.tsx
 import { useEffect, useState, useCallback } from 'react'
 import { onWSMessage } from '../../services/ws'
 import { getMessages, sendMessage, uploadFiles } from '../../api/chats'
 import { useChatContext } from '../../context/ChatContext'
 import ChatMessages from './ChatMessages'
 import ChatInput from './ChatInput'
+import ChatTopBar from './ChatTopBar'
 import Lightbox from './Lightbox'
 import { styles } from './chat.styles'
 import type { Message, PendingFile } from './chat.types'
@@ -11,7 +13,7 @@ import type { Message, PendingFile } from './chat.types'
 type Props = { chatId: string }
 
 export default function Chat({ chatId }: Props) {
-  const { getSafeUser, markRead, notifyOwnMessage } = useChatContext()
+  const { getSafeUser, markRead, notifyOwnMessage, chats, myId } = useChatContext()
 
   const [messages, setMessages] = useState<Message[]>([])
   const [text, setText] = useState('')
@@ -20,19 +22,21 @@ export default function Chat({ chatId }: Props) {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
-  // Сброс при смене чата
+  // Находим собеседника по chatId
+  const chat = chats.find(c => c.chatId === chatId)
+  const withId = chat?.members.find(m => m !== myId)
+  const companion = withId ? getSafeUser(withId) : null
+
   useEffect(() => {
     markRead(chatId)
     setMessages([])
     setPendingFiles([])
     setText('')
-
     getMessages(chatId).then(data => {
       setMessages(Array.isArray(data) ? data : [])
     })
   }, [chatId])
 
-  // WS push
   useEffect(() => {
     const off = onWSMessage(msg => {
       if (msg.event === 'message:new' && msg.data.chatId === chatId) {
@@ -50,9 +54,7 @@ export default function Chat({ chatId }: Props) {
   const handleFileRemove = useCallback((index: number) => {
     setPendingFiles(prev => {
       const updated = [...prev]
-      if (updated[index].previewUrl) {
-        URL.revokeObjectURL(updated[index].previewUrl!)
-      }
+      if (updated[index].previewUrl) URL.revokeObjectURL(updated[index].previewUrl!)
       updated.splice(index, 1)
       return updated
     })
@@ -68,13 +70,9 @@ export default function Chat({ chatId }: Props) {
     if (hasFiles) {
       setUploading(true)
       setUploadProgress(0)
-
       const files = pendingFiles.map(pf => pf.file)
-      pendingFiles.forEach(pf => {
-        if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl)
-      })
+      pendingFiles.forEach(pf => { if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl) })
       setPendingFiles([])
-
       try {
         const msg = await uploadFiles(chatId, trimmed, files, setUploadProgress)
         setMessages(prev => [...prev, msg])
@@ -103,6 +101,13 @@ export default function Chat({ chatId }: Props) {
       {lightboxUrl && (
         <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
+
+      {/* Верхний бар */}
+      <ChatTopBar
+        user={companion}
+        onCall={() => console.log('call', chatId)}
+        onSettings={() => console.log('settings', chatId)}
+      />
 
       <ChatMessages
         messages={messages}

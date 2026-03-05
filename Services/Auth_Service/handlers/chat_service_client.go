@@ -1,8 +1,8 @@
-// Authorization/handlers/chat_service_client.go
+// Auth_Service/handlers/chat_service_client.go
 package handlers
 
 import (
-	"Authorization/config"
+	"Auth_Service/config"
 	"context"
 	"fmt"
 	"io"
