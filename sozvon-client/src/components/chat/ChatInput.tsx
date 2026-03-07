@@ -1,6 +1,6 @@
 //sozvon-client\src\components\chat\ChatInput.tsx
 
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { styles } from './chat.styles'
 import type { PendingFile } from './chat.types'
 
@@ -25,17 +25,55 @@ export default function ChatInput({
 
   const remaining = MAX_FILES - pendingFiles.length
 
+  useEffect(() => {
+  const handleDrop = (e: DragEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+
+  const files = Array.from(e.dataTransfer?.files || [])
+  if (files.length === 0 || remaining <= 0) return
+
+  const toAdd = files.slice(0, remaining)
+  const newFiles: PendingFile[] = toAdd.map(file => ({
+    file,
+    previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+  }))
+  onFilesAdded(newFiles)
+}
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault() // без этого drop не сработает
+  }
+
+  window.addEventListener('drop', handleDrop)
+  window.addEventListener('dragover', handleDragOver)
+
+  return () => {
+    window.removeEventListener('drop', handleDrop)
+    window.removeEventListener('dragover', handleDragOver)
+  }
+}, [onFilesAdded, remaining])
+
 const handlePaste = useCallback((e: React.ClipboardEvent) => {
   const items = Array.from(e.clipboardData.items)
 
-  // 1. Сначала проверяем HTML — там может быть прямая ссылка на GIF
   const htmlItem = items.find(i => i.kind === 'string' && i.type === 'text/html')
-  if (htmlItem && remaining > 0) {
-    htmlItem.getAsString(async (html) => {
+  const fileItems = items.filter(
+    i => i.kind === 'file' && i.type.startsWith('image/')
+  )
+
+  // Превентим дефолт СИНХРОННО, до любых async операций
+  const hasGifHtml = htmlItem && remaining > 0
+  const hasImageFiles = fileItems.length > 0 && remaining > 0
+
+  if (!hasGifHtml && !hasImageFiles) return
+  e.preventDefault() // <-- здесь, синхронно
+
+  if (hasGifHtml) {
+    htmlItem!.getAsString(async (html) => {
       const match = html.match(/<img[^>]+src="([^"]+\.gif[^"]*)"/)
       if (!match) return
 
-      e.preventDefault()
       try {
         const response = await fetch(match[1])
         const blob = await response.blob()
@@ -49,18 +87,10 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
         console.warn('Failed to fetch GIF:', match[1])
       }
     })
-    // Выходим — GIF обрабатывается асинхронно выше
-    // PNG превью от Windows игнорируем
     return
   }
 
-  // 2. Обычные файлы — скриншоты, скопированные изображения
-  const fileItems = items.filter(
-    i => i.kind === 'file' && i.type.startsWith('image/')
-  )
-  if (fileItems.length === 0 || remaining <= 0) return
-
-  e.preventDefault()
+  // Обычные файлы
   const toAdd = fileItems.slice(0, remaining)
   const newFiles: PendingFile[] = toAdd.map(item => {
     const file = item.getAsFile()!
