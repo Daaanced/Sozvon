@@ -2,7 +2,8 @@
 
 import { useRef, useCallback, useEffect } from 'react'
 import { styles } from './chat.styles'
-import type { PendingFile } from './chat.types'
+// Добавить импорт Message:
+import type { Message, PendingFile } from './chat.types'
 
 const MAX_FILES = 4
 
@@ -11,6 +12,10 @@ type Props = {
   pendingFiles: PendingFile[]
   uploading: boolean
   uploadProgress: number
+  replyTo: Message | null
+  forwardFrom: Message | null
+  onCancelReply: () => void
+  onCancelForward: () => void
   onTextChange: (value: string) => void
   onSend: () => void
   onFilesAdded: (files: PendingFile[]) => void
@@ -18,7 +23,8 @@ type Props = {
 }
 
 export default function ChatInput({
-  text, pendingFiles, uploading, uploadProgress,
+   text, pendingFiles, uploading, uploadProgress,
+  replyTo, forwardFrom, onCancelReply, onCancelForward,
   onTextChange, onSend, onFilesAdded, onFileRemove
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -117,6 +123,19 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
 
   return (
     <div>
+		{replyTo && (
+		<div style={{ padding: '6px 12px', background: '#A4C7F0', borderLeft: '3px solid #717070', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+			<span>↩ Ответ: {replyTo.text.slice(0, 60)}{replyTo.text.length > 60 ? '...' : ''}</span>
+			<button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}>✕</button>
+		</div>
+		)}
+
+		{forwardFrom && (
+		<div style={{ padding: '6px 12px', background: '#898989', borderLeft: '3px solid #4a9eff', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+			<span>↪ Пересылка: {forwardFrom.text.slice(0, 60)}{forwardFrom.text.length > 60 ? '...' : ''}</span>
+			<button onClick={onCancelForward} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}>✕</button>
+		</div>
+		)}
       {/* Превью выбранных файлов */}
       {pendingFiles.length > 0 && (
         <div style={styles.pendingFiles}>

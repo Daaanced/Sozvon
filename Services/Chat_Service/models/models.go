@@ -19,11 +19,15 @@ type Chat struct {
 	ID        string    `json:"id"`
 	Members   []int     `json:"members"`
 	Active    bool      `json:"active"`
+	Type      string    `json:"type"`
+	Name      string    `json:"name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type ChatListItem struct {
 	ChatID      string    `json:"chatId"`
+	Type        string    `json:"type"`
+	Name        string    `json:"name,omitempty"`
 	Members     []int     `json:"members"`
 	LastMessage string    `json:"lastMessage"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -41,12 +45,21 @@ type Attachment struct {
 }
 
 type Message struct {
-	ID          string       `json:"id"`
-	ChatID      string       `json:"chatId"`
-	SenderID    int          `json:"senderId"`
-	Text        string       `json:"text"`
-	Attachments []Attachment `json:"attachments,omitempty"`
-	CreatedAt   time.Time    `json:"createdAt"`
+	ID              string        `json:"id"`
+	ChatID          string        `json:"chatId"`
+	SenderID        int           `json:"senderId"`
+	Text            string        `json:"text"`
+	ReplyToID       *string       `json:"replyToId,omitempty"`
+	ReplyToMessage  *ReplyPreview `json:"replyToMessage,omitempty"`
+	ForwardedFromID *string       `json:"forwardedFromId,omitempty"`
+	Attachments     []Attachment  `json:"attachments,omitempty"`
+	CreatedAt       time.Time     `json:"createdAt"`
+}
+
+type ReplyPreview struct {
+	ID       string `json:"id"`
+	SenderID int    `json:"senderId"`
+	Text     string `json:"text"`
 }
 
 type CreateChatRequest struct {
@@ -65,11 +78,13 @@ func (r *CreateChatRequest) Validate() error {
 }
 
 type SendMessageRequest struct {
-	Text string `json:"text"`
+	Text            string  `json:"text"`
+	ReplyToID       *string `json:"replyToId,omitempty"`
+	ForwardedFromID *string `json:"forwardedFromId,omitempty"`
 }
 
 func (r *SendMessageRequest) Validate() error {
-	if r.Text == "" {
+	if r.ForwardedFromID == nil && r.Text == "" {
 		return ErrEmptyMessage
 	}
 	if len(r.Text) > MaxMessageLength {

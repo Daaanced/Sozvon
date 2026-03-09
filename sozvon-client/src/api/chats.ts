@@ -18,10 +18,14 @@ export function getMessages(chatId: string, limit = 50, offset = 0) {
   return requestAuth(`/chats/${chatId}/messages?limit=${limit}&offset=${offset}`)
 }
 
-export function sendMessage(chatId: string, text: string) {
+export function getMessagesContext(chatId: string, messageId: string) {
+  return requestAuth(`/chats/${chatId}/messages/${messageId}/context`)
+}
+
+export function sendMessage(chatId: string, text: string, replyToId?: string, forwardedFromId?: string) {
   return requestAuth(`/chats/${chatId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ text, replyToId, forwardedFromId })
   })
 }
 
@@ -30,6 +34,8 @@ export function uploadFiles(
   chatId: string,
   text: string,
   files: File[],
+  replyToId?: string,
+  forwardedFromId?: string,
   onProgress?: (percent: number) => void
 ): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -39,6 +45,9 @@ export function uploadFiles(
     if (text.trim()) {
       formData.append('text', text.trim())
     }
+
+	if (replyToId) formData.append('replyToId', replyToId)
+	if (forwardedFromId) formData.append('forwardedFromId', forwardedFromId)
 
     files.forEach(file => formData.append('files', file))
 

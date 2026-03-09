@@ -53,37 +53,44 @@ func (d *Database) Close() error {
 func (d *Database) Migrate() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS chats (
-			id         UUID PRIMARY KEY,
-			active     BOOLEAN NOT NULL DEFAULT FALSE,
+			id         UUID      PRIMARY KEY,
+			active     BOOLEAN   NOT NULL DEFAULT FALSE,
+			type       TEXT      NOT NULL DEFAULT 'direct',
+			name       TEXT,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		);
 
 		CREATE TABLE IF NOT EXISTS chat_members (
-			chat_id UUID REFERENCES chats(id) ON DELETE CASCADE,
+			chat_id UUID    REFERENCES chats(id) ON DELETE CASCADE,
 			user_id INTEGER NOT NULL,
 			PRIMARY KEY (chat_id, user_id)
 		);
 
 		CREATE TABLE IF NOT EXISTS messages (
-			id         UUID PRIMARY KEY,
-			chat_id    UUID REFERENCES chats(id) ON DELETE CASCADE,
-			sender_id  INTEGER NOT NULL,
-			text       TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW()
-		);
-		CREATE TABLE IF NOT EXISTS attachments (
-			id         UUID PRIMARY KEY,
-			message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
-			file_name  TEXT NOT NULL,
-			store_name TEXT NOT NULL,
-			mime_type  TEXT NOT NULL,
-			size       BIGINT NOT NULL
+			id               UUID      PRIMARY KEY,
+			chat_id          UUID      REFERENCES chats(id)    ON DELETE CASCADE,
+			sender_id        INTEGER   NOT NULL,
+			text             TEXT      NOT NULL,
+			reply_to_id      UUID      REFERENCES messages(id) ON DELETE SET NULL,
+			forwarded_from_id UUID     REFERENCES messages(id) ON DELETE SET NULL,
+			created_at       TIMESTAMP NOT NULL DEFAULT NOW()
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
+		CREATE TABLE IF NOT EXISTS attachments (
+			id         UUID    PRIMARY KEY,
+			message_id UUID    REFERENCES messages(id) ON DELETE CASCADE,
+			file_name  TEXT    NOT NULL,
+			store_name TEXT    NOT NULL,
+			mime_type  TEXT    NOT NULL,
+			size       BIGINT  NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_attachments_message_id   ON attachments(message_id);
 		CREATE INDEX IF NOT EXISTS idx_messages_chat_id_created ON messages(chat_id, created_at);
-		CREATE INDEX IF NOT EXISTS idx_chats_active ON chats(active);
-		CREATE INDEX IF NOT EXISTS idx_chat_members_user_id ON chat_members(user_id);
+		CREATE INDEX IF NOT EXISTS idx_messages_reply_to        ON messages(reply_to_id);
+		CREATE INDEX IF NOT EXISTS idx_chats_active             ON chats(active);
+		CREATE INDEX IF NOT EXISTS idx_chats_type               ON chats(type);
+		CREATE INDEX IF NOT EXISTS idx_chat_members_user_id     ON chat_members(user_id);
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -119,7 +126,7 @@ func (d *Database) FindExistingChat(ctx context.Context, userID1, userID2 int) (
 }
 
 // CreateChat создаёт новый чат с участниками по user_id
-func (d *Database) CreateChat(ctx context.Context, memberIDs []int, active bool) (string, error) {
+func (d *Database) CreateChat(ctx context.Context, memberIDs []int, active bool, chatType string, name string) (string, error) {
 	chatID := uuid.NewString()
 
 	tx, err := d.db.BeginTx(ctx, nil)
@@ -129,8 +136,8 @@ func (d *Database) CreateChat(ctx context.Context, memberIDs []int, active bool)
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO chats (id, active) VALUES ($1, $2)`,
-		chatID, active,
+		`INSERT INTO chats (id, active, type, name) VALUES ($1, $2, $3, $4)`,
+		chatID, active, chatType, name,
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert chat: %w", err)
@@ -190,24 +197,26 @@ func (d *Database) IsMember(ctx context.Context, chatID string, userID int) (boo
 }
 
 // SaveMessage сохраняет сообщение, sender — user_id
-func (d *Database) SaveMessage(ctx context.Context, chatID string, senderID int, text string) (*models.Message, error) {
+func (d *Database) SaveMessage(ctx context.Context, chatID string, senderID int, text string, replyToID *string, forwardedFromID *string) (*models.Message, error) {
 	messageID := uuid.NewString()
 	now := time.Now()
 
 	_, err := d.db.ExecContext(ctx,
-		`INSERT INTO messages (id, chat_id, sender_id, text, created_at) VALUES ($1, $2, $3, $4, $5)`,
-		messageID, chatID, senderID, text, now,
+		`INSERT INTO messages (id, chat_id, sender_id, text, reply_to_id, forwarded_from_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		messageID, chatID, senderID, text, replyToID, forwardedFromID, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save message: %w", err)
 	}
 
 	return &models.Message{
-		ID:        messageID,
-		ChatID:    chatID,
-		SenderID:  senderID,
-		Text:      text,
-		CreatedAt: now,
+		ID:              messageID,
+		ChatID:          chatID,
+		SenderID:        senderID,
+		Text:            text,
+		ReplyToID:       replyToID,
+		ForwardedFromID: forwardedFromID,
+		CreatedAt:       now,
 	}, nil
 }
 
@@ -232,6 +241,8 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 	query := `
 		SELECT
 			c.id,
+			c.type,
+			COALESCE(c.name, '') AS name,
 			array_agg(cm.user_id) AS members,
 			COALESCE(m.text, '')              AS last_message,
 			COALESCE(m.created_at, c.created_at) AS updated_at
@@ -247,7 +258,7 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 		WHERE c.id IN (
 			SELECT chat_id FROM chat_members WHERE user_id = $1
 		) AND c.active = true
-		GROUP BY c.id, m.text, m.created_at, c.created_at
+		GROUP BY c.id, c.type, c.name, m.text, m.created_at, c.created_at
 		ORDER BY COALESCE(m.created_at, c.created_at) DESC
 	`
 
@@ -262,7 +273,7 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 		var item models.ChatListItem
 		var members pqIntArray
 
-		if err := rows.Scan(&item.ChatID, &members, &item.LastMessage, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ChatID, &item.Type, &item.Name, &members, &item.LastMessage, &item.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan chat: %w", err)
 		}
 
@@ -276,11 +287,15 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 // GetChatMessages возвращает сообщения чата с пагинацией
 func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, offset int) ([]models.Message, error) {
 	rows, err := d.db.QueryContext(ctx,
-		`SELECT id, chat_id, sender_id, text, created_at
-		 FROM messages
-		 WHERE chat_id = $1
-		 ORDER BY created_at ASC
-		 LIMIT $2 OFFSET $3`,
+		`SELECT
+        m.id, m.chat_id, m.sender_id, m.text,
+        m.reply_to_id, m.forwarded_from_id, m.created_at,
+        r.id, r.sender_id, r.text
+    FROM messages m
+    LEFT JOIN messages r ON r.id = m.reply_to_id
+    WHERE m.chat_id = $1
+    ORDER BY m.created_at ASC
+    LIMIT $2 OFFSET $3`,
 		chatID, limit, offset,
 	)
 	if err != nil {
@@ -289,14 +304,74 @@ func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, of
 	defer rows.Close()
 
 	var messages []models.Message
+
 	for rows.Next() {
 		var msg models.Message
-		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text, &msg.CreatedAt); err != nil {
+		var replyID sql.NullString
+		var replyFwdID sql.NullString
+		var rID sql.NullString
+		var rSenderID sql.NullInt64
+		var rText sql.NullString
+
+		if err := rows.Scan(
+			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text,
+			&replyID, &replyFwdID, &msg.CreatedAt,
+			&rID, &rSenderID, &rText,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan message: %w", err)
+		}
+
+		if replyID.Valid {
+			msg.ReplyToID = &replyID.String
+		}
+		if replyFwdID.Valid {
+			msg.ForwardedFromID = &replyFwdID.String
+		}
+		if rID.Valid {
+			msg.ReplyToMessage = &models.ReplyPreview{
+				ID:       rID.String,
+				SenderID: int(rSenderID.Int64),
+				Text:     rText.String,
+			}
+		}
+
+		messages = append(messages, msg)
+	}
+
+	return messages, nil
+}
+
+func (d *Database) GetMessagesAroundID(ctx context.Context, chatID string, messageID string, around int) ([]models.Message, error) {
+	query := `
+		WITH ranked AS (
+			SELECT id, chat_id, sender_id, text, reply_to_id, forwarded_from_id, created_at,
+			       ROW_NUMBER() OVER (ORDER BY created_at ASC) AS rn
+			FROM messages
+			WHERE chat_id = $1
+		),
+		target_rn AS (
+			SELECT rn FROM ranked WHERE id = $2
+		)
+		SELECT id, chat_id, sender_id, text, reply_to_id, forwarded_from_id, created_at
+		FROM ranked
+		WHERE rn BETWEEN (SELECT rn FROM target_rn) - $3
+		              AND (SELECT rn FROM target_rn) + $3
+		ORDER BY created_at ASC
+	`
+	rows, err := d.db.QueryContext(ctx, query, chatID, messageID, around)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages around: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		var msg models.Message
+		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text, &msg.ReplyToID, &msg.ForwardedFromID, &msg.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 		messages = append(messages, msg)
 	}
-
 	return messages, nil
 }
 

@@ -6,6 +6,8 @@ import { requestAuth } from '../api/http'
 
 type Chat = {
   chatId: string
+  type: string
+  name?: string
   members: number[]
   lastMessage?: string
   updatedAt?: string

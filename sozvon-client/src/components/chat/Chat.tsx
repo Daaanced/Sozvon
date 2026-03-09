@@ -1,7 +1,7 @@
 //sozvon-client\src\components\chat\Chat.tsx
 import { useEffect, useState, useCallback } from 'react'
 import { onWSMessage } from '../../services/ws'
-import { getMessages, sendMessage, uploadFiles } from '../../api/chats'
+import { getMessages, getMessagesContext, sendMessage, uploadFiles } from '../../api/chats'
 import { useChatContext } from '../../context/ChatContext'
 import ChatMessages from './ChatMessages'
 import ChatInput from './ChatInput'
@@ -21,7 +21,9 @@ export default function Chat({ chatId }: Props) {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
-
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [forwardFrom, setForwardFrom] = useState<Message | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
   // Находим собеседника по chatId
   const chat = chats.find(c => c.chatId === chatId)
   const withId = chat?.members.find(m => m !== myId)
@@ -60,6 +62,42 @@ export default function Chat({ chatId }: Props) {
     })
   }, [])
 
+// Заменить сигнатуру функции:
+async function scrollToMessage(id: string, messageRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>) {
+  // Сообщение уже загружено
+  if (messageRefs.current[id]) {
+    messageRefs.current[id]!.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightId(id)
+    setTimeout(() => setHighlightId(null), 1500)
+    return
+  }
+
+  // Подгружаем контекст
+  try {
+    const data = await getMessagesContext(chatId, id)
+    if (!Array.isArray(data)) return
+
+    // Мержим — добавляем только те, которых ещё нет
+    setMessages(prev => {
+      const existingIds = new Set(prev.map(m => m.id))
+      const newOnes = data.filter((m: Message) => !existingIds.has(m.id))
+      const merged = [...prev, ...newOnes].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      )
+      return merged
+    })
+
+    // Скролл после рендера
+    setHighlightId(id)
+    setTimeout(() => {
+      messageRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => setHighlightId(null), 1500)
+    }, 100)
+  } catch (e) {
+    console.error('Failed to load message context:', e)
+  }
+}
+
   async function send() {
     const trimmed = text.trim()
     const hasFiles = pendingFiles.length > 0
@@ -74,9 +112,11 @@ export default function Chat({ chatId }: Props) {
       pendingFiles.forEach(pf => { if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl) })
       setPendingFiles([])
       try {
-        const msg = await uploadFiles(chatId, trimmed, files, setUploadProgress)
+        const msg = await uploadFiles(chatId, trimmed, files, replyTo?.id, forwardFrom?.id, setUploadProgress)
         setMessages(prev => [...prev, msg])
         notifyOwnMessage(chatId)
+		setReplyTo(null)
+		setForwardFrom(null)
       } catch (e) {
         console.error('Upload failed:', e)
         setText(trimmed)
@@ -86,9 +126,11 @@ export default function Chat({ chatId }: Props) {
       }
     } else {
       try {
-        const msg = await sendMessage(chatId, trimmed)
+        const msg = await sendMessage(chatId, trimmed, replyTo?.id, forwardFrom?.id)
         setMessages(prev => [...prev, msg])
         notifyOwnMessage(chatId)
+		setReplyTo(null)
+		setForwardFrom(null)
       } catch (e) {
         console.error('Send failed:', e)
         setText(trimmed)
@@ -109,22 +151,30 @@ export default function Chat({ chatId }: Props) {
         onSettings={() => console.log('settings', chatId)}
       />
 
-      <ChatMessages
-        messages={messages}
-        getUser={getSafeUser}
-        onImageClick={setLightboxUrl}
-      />
+	<ChatMessages
+		messages={messages}
+		getUser={getSafeUser}
+		onImageClick={setLightboxUrl}
+		onReply={setReplyTo}
+		onForward={setForwardFrom}
+		highlightId={highlightId}             
+		onScrollToMessage={scrollToMessage}
+	/>
 
-      <ChatInput
-        text={text}
-        pendingFiles={pendingFiles}
-        uploading={uploading}
-        uploadProgress={uploadProgress}
-        onTextChange={setText}
-        onSend={send}
-        onFilesAdded={handleFilesAdded}
-        onFileRemove={handleFileRemove}
-      />
+    <ChatInput
+		text={text}
+		pendingFiles={pendingFiles}
+		uploading={uploading}
+		uploadProgress={uploadProgress}
+		replyTo={replyTo}
+		forwardFrom={forwardFrom}
+		onCancelReply={() => setReplyTo(null)}
+		onCancelForward={() => setForwardFrom(null)}
+		onTextChange={setText}
+		onSend={send}
+		onFilesAdded={handleFilesAdded}
+		onFileRemove={handleFileRemove}
+	/>
     </div>
   )
 }

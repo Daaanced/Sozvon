@@ -204,20 +204,6 @@ fileCounter: {
     gap: 10,
     overflow: 'hidden',
   },
-//   avatar: {
-//     width: 36,
-//     height: 36,
-//     borderRadius: '50%',
-//     objectFit: 'cover',
-//     flexShrink: 0,
-//   },
-//   userName: {
-//     fontWeight: 600,
-//     fontSize: 15,
-//     overflow: 'hidden',
-//     textOverflow: 'ellipsis',
-//     whiteSpace: 'nowrap',
-//   },
   actions: {
     display: 'flex',
     alignItems: 'center',

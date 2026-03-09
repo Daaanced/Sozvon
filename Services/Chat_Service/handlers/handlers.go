@@ -56,6 +56,7 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/chats/create", h.CreateChat).Methods("POST", "OPTIONS")
 	r.HandleFunc("/chats", h.GetChats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
+	r.HandleFunc("/chats/{chatId}/messages/{messageId}/context", h.GetMessagesContext).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.SendMessage).Methods("POST", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/upload", h.UploadFiles).Methods("POST", "OPTIONS")
 	r.HandleFunc("/media/{filename}", h.ServeMedia).Methods("GET")
@@ -134,7 +135,7 @@ func (h *ChatHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chatID, err := h.db.CreateChat(ctx, []int{fromID, body.ToID}, true)
+	chatID, err := h.db.CreateChat(ctx, []int{fromID, body.ToID}, true, "direct", "")
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to create chat")
 		return
@@ -188,7 +189,7 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохранение
-	msg, err := h.db.SaveMessage(ctx, chatID, userID, req.Text)
+	msg, err := h.db.SaveMessage(ctx, chatID, userID, req.Text, req.ReplyToID, req.ForwardedFromID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to save message")
 		return
@@ -251,6 +252,19 @@ func (h *ChatHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 
 	text := r.FormValue("text")
 
+	replyToIDStr := r.FormValue("replyToId")
+	forwardedFromIDStr := r.FormValue("forwardedFromId")
+
+	var replyToID *string
+	if replyToIDStr != "" {
+		replyToID = &replyToIDStr
+	}
+
+	var forwardedFromID *string
+	if forwardedFromIDStr != "" {
+		forwardedFromID = &forwardedFromIDStr
+	}
+
 	// Валидация: должен быть либо текст, либо файлы
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 && text == "" {
@@ -268,7 +282,8 @@ func (h *ChatHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем сообщение
-	msg, err := h.db.SaveMessage(ctx, chatID, userID, text)
+	// Заменить вызов SaveMessage:
+	msg, err := h.db.SaveMessage(ctx, chatID, userID, text, replyToID, forwardedFromID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to save message")
 		return
@@ -428,6 +443,44 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 			for i, m := range messages {
 				if atts, ok := attachmentsMap[m.ID]; ok {
 					// Заполняем URL (не хранится в БД)
+					for j := range atts {
+						atts[j].URL = h.config.Media.BaseURL + "/media/" + atts[j].StoreName
+					}
+					messages[i].Attachments = atts
+				}
+			}
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, messages)
+}
+
+// GetMessagesContext — GET /chats/{chatId}/messages/{messageId}/context
+func (h *ChatHandler) GetMessagesContext(w http.ResponseWriter, r *http.Request) {
+	chatID := mux.Vars(r)["chatId"]
+	messageID := mux.Vars(r)["messageId"]
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	messages, err := h.db.GetMessagesAroundID(ctx, chatID, messageID, 25)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to get context")
+		return
+	}
+
+	// Подгружаем вложения — тот же блок что в GetMessages
+	if len(messages) > 0 {
+		ids := make([]string, len(messages))
+		for i, m := range messages {
+			ids[i] = m.ID
+		}
+		attachmentsMap, err := h.db.GetAttachmentsByMessageIDs(ctx, ids)
+		if err != nil {
+			log.Printf("Failed to load attachments: %v", err)
+		} else {
+			for i, m := range messages {
+				if atts, ok := attachmentsMap[m.ID]; ok {
 					for j := range atts {
 						atts[j].URL = h.config.Media.BaseURL + "/media/" + atts[j].StoreName
 					}

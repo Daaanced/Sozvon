@@ -1,3 +1,5 @@
+//sozvon-client\src\components\chat\Lightbox.tsx
+
 import { styles } from './chat.styles'
 
 type Props = {

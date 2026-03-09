@@ -8,10 +8,19 @@ export type Attachment = {
   url: string
 }
 
+export type ReplyPreview = {
+  id: string
+  senderId: number
+  text: string
+}
+
 export type Message = {
   id: string
   senderId: number
   text: string
+  replyToId?: string
+  replyToMessage?: ReplyPreview
+  forwardedFromId?: string
   attachments?: Attachment[]
   createdAt: string
 }
