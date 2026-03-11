@@ -1,13 +1,13 @@
 // sozvon-client/src/pages/ChatPage.tsx
-import { useParams } from 'react-router-dom'
-import Chat from '../components/chat/Chat'
+import { useParams } from "react-router-dom";
+import Chat from "../components/chat/Chat";
 
 export default function ChatPage() {
-  const { chatId } = useParams<{ chatId: string }>()
+  const { chatId } = useParams<{ chatId: string }>();
 
   if (!chatId) {
-    return <div>Select a chat</div>
+    return <div>Select a chat</div>;
   }
 
-  return <Chat chatId={chatId} />
+  return <Chat chatId={chatId} />;
 }

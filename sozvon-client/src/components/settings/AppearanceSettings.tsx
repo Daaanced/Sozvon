@@ -4,5 +4,5 @@ export default function AppearanceSettings() {
       <h2>Appearance</h2>
       <p>Theme, colors, UI settings will be here.</p>
     </>
-  )
+  );
 }

@@ -4,5 +4,5 @@ export default function SoundSettings() {
       <h2>Sound</h2>
       <p>Microphone, volume and device settings.</p>
     </>
-  )
+  );
 }

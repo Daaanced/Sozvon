@@ -1,11 +1,11 @@
 //sozvon-client\src\components\chat\Lightbox.tsx
 
-import { styles } from './chat.styles'
+import { styles } from "./chat.styles";
 
 type Props = {
-  url: string
-  onClose: () => void
-}
+  url: string;
+  onClose: () => void;
+};
 
 export default function Lightbox({ url, onClose }: Props) {
   return (
@@ -13,11 +13,11 @@ export default function Lightbox({ url, onClose }: Props) {
       <img
         src={url}
         style={styles.lightboxImage}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       />
       <button style={styles.lightboxClose} onClick={onClose}>
         ✕
       </button>
     </div>
-  )
+  );
 }

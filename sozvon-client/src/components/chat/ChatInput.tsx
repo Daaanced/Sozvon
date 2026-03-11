@@ -1,141 +1,199 @@
 //sozvon-client\src\components\chat\ChatInput.tsx
 
-import { useRef, useCallback, useEffect } from 'react'
-import { styles } from './chat.styles'
-// Добавить импорт Message:
-import type { Message, PendingFile } from './chat.types'
+import { useRef, useCallback, useEffect } from "react";
+import { styles } from "./chat.styles";
+import type { Message, PendingFile } from "./chat.types";
 
-const MAX_FILES = 4
+const MAX_FILES = 4;
 
 type Props = {
-  text: string
-  pendingFiles: PendingFile[]
-  uploading: boolean
-  uploadProgress: number
-  replyTo: Message | null
-  forwardFrom: Message | null
-  onCancelReply: () => void
-  onCancelForward: () => void
-  onTextChange: (value: string) => void
-  onSend: () => void
-  onFilesAdded: (files: PendingFile[]) => void
-  onFileRemove: (index: number) => void
-}
+  text: string;
+  pendingFiles: PendingFile[];
+  uploading: boolean;
+  uploadProgress: number;
+  replyTo: Message | null;
+  forwardFrom: Message | null;
+  onCancelReply: () => void;
+  onCancelForward: () => void;
+  onTextChange: (value: string) => void;
+  onSend: () => void;
+  onFilesAdded: (files: PendingFile[]) => void;
+  onFileRemove: (index: number) => void;
+};
 
 export default function ChatInput({
-   text, pendingFiles, uploading, uploadProgress,
-  replyTo, forwardFrom, onCancelReply, onCancelForward,
-  onTextChange, onSend, onFilesAdded, onFileRemove
+  text,
+  pendingFiles,
+  uploading,
+  uploadProgress,
+  replyTo,
+  forwardFrom,
+  onCancelReply,
+  onCancelForward,
+  onTextChange,
+  onSend,
+  onFilesAdded,
+  onFileRemove,
 }: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const remaining = MAX_FILES - pendingFiles.length
+  const remaining = MAX_FILES - pendingFiles.length;
 
   useEffect(() => {
-  const handleDrop = (e: DragEvent) => {
-  e.preventDefault()
-  e.stopPropagation()
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-  const files = Array.from(e.dataTransfer?.files || [])
-  if (files.length === 0 || remaining <= 0) return
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (files.length === 0 || remaining <= 0) return;
 
-  const toAdd = files.slice(0, remaining)
-  const newFiles: PendingFile[] = toAdd.map(file => ({
-    file,
-    previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
-  }))
-  onFilesAdded(newFiles)
-}
+      const toAdd = files.slice(0, remaining);
+      const newFiles: PendingFile[] = toAdd.map((file) => ({
+        file,
+        previewUrl: file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : null,
+      }));
+      onFilesAdded(newFiles);
+    };
 
-  const handleDragOver = (e: DragEvent) => {
-    e.preventDefault() // без этого drop не сработает
-  }
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault(); // без этого drop не сработает
+    };
 
-  window.addEventListener('drop', handleDrop)
-  window.addEventListener('dragover', handleDragOver)
+    window.addEventListener("drop", handleDrop);
+    window.addEventListener("dragover", handleDragOver);
 
-  return () => {
-    window.removeEventListener('drop', handleDrop)
-    window.removeEventListener('dragover', handleDragOver)
-  }
-}, [onFilesAdded, remaining])
+    return () => {
+      window.removeEventListener("drop", handleDrop);
+      window.removeEventListener("dragover", handleDragOver);
+    };
+  }, [onFilesAdded, remaining]);
 
-const handlePaste = useCallback((e: React.ClipboardEvent) => {
-  const items = Array.from(e.clipboardData.items)
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = Array.from(e.clipboardData.items);
 
-  const htmlItem = items.find(i => i.kind === 'string' && i.type === 'text/html')
-  const fileItems = items.filter(
-    i => i.kind === 'file' && i.type.startsWith('image/')
-  )
+      const htmlItem = items.find(
+        (i) => i.kind === "string" && i.type === "text/html",
+      );
+      const fileItems = items.filter(
+        (i) => i.kind === "file" && i.type.startsWith("image/"),
+      );
 
-  // Превентим дефолт СИНХРОННО, до любых async операций
-  const hasGifHtml = htmlItem && remaining > 0
-  const hasImageFiles = fileItems.length > 0 && remaining > 0
+      // Превентим дефолт СИНХРОННО, до любых async операций
+      const hasGifHtml = htmlItem && remaining > 0;
+      const hasImageFiles = fileItems.length > 0 && remaining > 0;
 
-  if (!hasGifHtml && !hasImageFiles) return
-  e.preventDefault() // <-- здесь, синхронно
+      if (!hasGifHtml && !hasImageFiles) return;
+      e.preventDefault();
 
-  if (hasGifHtml) {
-    htmlItem!.getAsString(async (html) => {
-      const match = html.match(/<img[^>]+src="([^"]+\.gif[^"]*)"/)
-      if (!match) return
+      if (hasGifHtml) {
+        htmlItem!.getAsString(async (html) => {
+          const match = html.match(/<img[^>]+src="([^"]+\.gif[^"]*)"/);
+          if (!match) return;
 
-      try {
-        const response = await fetch(match[1])
-        const blob = await response.blob()
-        const file = new File(
-          [blob],
-          `gif-${Date.now()}.gif`,
-          { type: 'image/gif' }
-        )
-        onFilesAdded([{ file, previewUrl: URL.createObjectURL(file) }])
-      } catch {
-        console.warn('Failed to fetch GIF:', match[1])
+          try {
+            const response = await fetch(match[1]);
+            const blob = await response.blob();
+            const file = new File([blob], `gif-${Date.now()}.gif`, {
+              type: "image/gif",
+            });
+            onFilesAdded([{ file, previewUrl: URL.createObjectURL(file) }]);
+          } catch {
+            console.warn("Failed to fetch GIF:", match[1]);
+          }
+        });
+        return;
       }
-    })
-    return
-  }
 
-  // Обычные файлы
-  const toAdd = fileItems.slice(0, remaining)
-  const newFiles: PendingFile[] = toAdd.map(item => {
-    const file = item.getAsFile()!
-    return { file, previewUrl: URL.createObjectURL(file) }
-  })
-  onFilesAdded(newFiles)
-
-}, [onFilesAdded, remaining])
+      // Обычные файлы
+      const toAdd = fileItems.slice(0, remaining);
+      const newFiles: PendingFile[] = toAdd.map((item) => {
+        const file = item.getAsFile()!;
+        return { file, previewUrl: URL.createObjectURL(file) };
+      });
+      onFilesAdded(newFiles);
+    },
+    [onFilesAdded, remaining],
+  );
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files || [])
-    if (selected.length === 0) return
-    if (remaining <= 0) return
+    const selected = Array.from(e.target.files || []);
+    if (selected.length === 0) return;
+    if (remaining <= 0) return;
 
-    const toAdd = selected.slice(0, remaining)
-    const newFiles: PendingFile[] = toAdd.map(file => ({
+    const toAdd = selected.slice(0, remaining);
+    const newFiles: PendingFile[] = toAdd.map((file) => ({
       file,
-      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
-    }))
+      previewUrl: file.type.startsWith("image/")
+        ? URL.createObjectURL(file)
+        : null,
+    }));
 
-    onFilesAdded(newFiles)
-    e.target.value = ''
+    onFilesAdded(newFiles);
+    e.target.value = "";
   }
 
   return (
     <div>
-		{replyTo && (
-		<div style={{ padding: '6px 12px', background: '#A4C7F0', borderLeft: '3px solid #717070', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-			<span>↩ Ответ: {replyTo.text.slice(0, 60)}{replyTo.text.length > 60 ? '...' : ''}</span>
-			<button onClick={onCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}>✕</button>
-		</div>
-		)}
+      {replyTo && (
+        <div
+          style={{
+            padding: "6px 12px",
+            background: "#A4C7F0",
+            borderLeft: "3px solid #717070",
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 13,
+          }}
+        >
+          <span>
+            ↩ Ответ: {replyTo.text.slice(0, 60)}
+            {replyTo.text.length > 60 ? "..." : ""}
+          </span>
+          <button
+            onClick={onCancelReply}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#aaa",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
-		{forwardFrom && (
-		<div style={{ padding: '6px 12px', background: '#898989', borderLeft: '3px solid #4a9eff', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-			<span>↪ Пересылка: {forwardFrom.text.slice(0, 60)}{forwardFrom.text.length > 60 ? '...' : ''}</span>
-			<button onClick={onCancelForward} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}>✕</button>
-		</div>
-		)}
+      {forwardFrom && (
+        <div
+          style={{
+            padding: "6px 12px",
+            background: "#898989",
+            borderLeft: "3px solid #4a9eff",
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 13,
+          }}
+        >
+          <span>
+            ↪ Пересылка: {forwardFrom.text.slice(0, 60)}
+            {forwardFrom.text.length > 60 ? "..." : ""}
+          </span>
+          <button
+            onClick={onCancelForward}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#aaa",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Превью выбранных файлов */}
       {pendingFiles.length > 0 && (
         <div style={styles.pendingFiles}>
@@ -148,10 +206,13 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
               )}
               <span style={styles.pendingFileName}>
                 {pf.file.name.length > 16
-                  ? pf.file.name.slice(0, 13) + '...'
+                  ? pf.file.name.slice(0, 13) + "..."
                   : pf.file.name}
               </span>
-              <button style={styles.pendingRemove} onClick={() => onFileRemove(i)}>
+              <button
+                style={styles.pendingRemove}
+                onClick={() => onFileRemove(i)}
+              >
                 ✕
               </button>
             </div>
@@ -169,7 +230,9 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
       {/* Прогресс */}
       {uploading && (
         <div style={styles.progressWrapper}>
-          <div style={{ ...styles.progressFill, width: `${uploadProgress}%` }} />
+          <div
+            style={{ ...styles.progressFill, width: `${uploadProgress}%` }}
+          />
           <span style={styles.progressText}>{uploadProgress}%</span>
         </div>
       )}
@@ -181,18 +244,18 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
           type="file"
           multiple
           accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt"
-          style={{ display: 'none' }}
+          style={{ display: "none" }}
           onChange={handleFileSelect}
         />
 
         <button
           style={{
             ...styles.attachBtn,
-            opacity: remaining <= 0 ? 0.4 : 1
+            opacity: remaining <= 0 ? 0.4 : 1,
           }}
           onClick={() => remaining > 0 && fileInputRef.current?.click()}
           disabled={uploading || remaining <= 0}
-          title={remaining <= 0 ? `Max ${MAX_FILES} files` : 'Attach files'}
+          title={remaining <= 0 ? `Max ${MAX_FILES} files` : "Attach files"}
         >
           📎
         </button>
@@ -201,13 +264,15 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
           style={styles.textInput}
           value={text}
           maxLength={4000}
-          placeholder={pendingFiles.length > 0 ? 'Add a caption...' : 'Type message...'}
+          placeholder={
+            pendingFiles.length > 0 ? "Add a caption..." : "Type message..."
+          }
           disabled={uploading}
-          onChange={e => onTextChange(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              onSend()
+          onChange={(e) => onTextChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSend();
             }
           }}
           onPaste={handlePaste}
@@ -216,14 +281,17 @@ const handlePaste = useCallback((e: React.ClipboardEvent) => {
         <button
           style={{
             ...styles.sendBtn,
-            opacity: (uploading || (!text.trim() && pendingFiles.length === 0)) ? 0.5 : 1
+            opacity:
+              uploading || (!text.trim() && pendingFiles.length === 0)
+                ? 0.5
+                : 1,
           }}
           onClick={onSend}
           disabled={uploading || (!text.trim() && pendingFiles.length === 0)}
         >
-          {uploading ? '...' : 'Send'}
+          {uploading ? "..." : "Send"}
         </button>
       </div>
     </div>
-  )
+  );
 }

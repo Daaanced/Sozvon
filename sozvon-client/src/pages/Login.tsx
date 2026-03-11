@@ -1,21 +1,21 @@
 //sozvon-client\src\pages\Login.tsx
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { login as loginRequest } from '../api/auth'
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { login as loginRequest } from "../api/auth";
 
 export default function Login() {
-  const [login, setLogin] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   async function handleLogin() {
     try {
-      const res = await loginRequest(login, password)
-      localStorage.setItem('token', res.token)
-      navigate('/app', { replace: true })
+      const res = await loginRequest(login, password);
+      localStorage.setItem("token", res.token);
+      navigate("/app", { replace: true });
     } catch (e: any) {
-      setError(e.message)
+      setError(e.message);
     }
   }
 
@@ -38,9 +38,9 @@ export default function Login() {
 
       <button onClick={handleLogin}>Login</button>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       <Link to="/register">Register</Link>
     </div>
-  )
+  );
 }

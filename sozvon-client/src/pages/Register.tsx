@@ -1,30 +1,30 @@
 //sozvon-client\src\pages\Register.tsx
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { register as registerRequest } from '../api/auth'
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { register as registerRequest } from "../api/auth";
 
 export default function Register() {
-  const [login, setLogin] = useState('')
-  const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   async function handleRegister() {
-    setMessage('')
-    setError('')
+    setMessage("");
+    setError("");
 
     if (!login || !password) {
-      setError('Login and password are required')
-      return
+      setError("Login and password are required");
+      return;
     }
 
     try {
-      await registerRequest(login, password)
-      setMessage('Registration successful. You can now log in.')
-      setLogin('')
-      setPassword('')
+      await registerRequest(login, password);
+      setMessage("Registration successful. You can now log in.");
+      setLogin("");
+      setPassword("");
     } catch (e: any) {
-      setError(e.message || 'Registration failed')
+      setError(e.message || "Registration failed");
     }
   }
 
@@ -47,10 +47,10 @@ export default function Register() {
 
       <button onClick={handleRegister}>Register</button>
 
-      {message && <p style={{ color: 'green' }}>{message}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {message && <p style={{ color: "green" }}>{message}</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       <Link to="/login">Back to login</Link>
     </div>
-  )
+  );
 }
