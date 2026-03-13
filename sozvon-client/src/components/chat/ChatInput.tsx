@@ -12,9 +12,7 @@ type Props = {
   uploading: boolean;
   uploadProgress: number;
   replyTo: Message | null;
-  forwardFrom: Message | null;
   onCancelReply: () => void;
-  onCancelForward: () => void;
   onTextChange: (value: string) => void;
   onSend: () => void;
   onFilesAdded: (files: PendingFile[]) => void;
@@ -27,9 +25,7 @@ export default function ChatInput({
   uploading,
   uploadProgress,
   replyTo,
-  forwardFrom,
   onCancelReply,
-  onCancelForward,
   onTextChange,
   onSend,
   onFilesAdded,
@@ -74,25 +70,30 @@ export default function ChatInput({
     (e: React.ClipboardEvent) => {
       const items = Array.from(e.clipboardData.items);
 
-      const htmlItem = items.find(
-        (i) => i.kind === "string" && i.type === "text/html",
-      );
       const fileItems = items.filter(
         (i) => i.kind === "file" && i.type.startsWith("image/"),
       );
 
-      // Превентим дефолт СИНХРОННО, до любых async операций
-      const hasGifHtml = htmlItem && remaining > 0;
-      const hasImageFiles = fileItems.length > 0 && remaining > 0;
+      // Есть реальные файлы/картинки в буфере — обрабатываем
+      if (fileItems.length > 0 && remaining > 0) {
+        e.preventDefault();
+        const toAdd = fileItems.slice(0, remaining);
+        const newFiles: PendingFile[] = toAdd.map((item) => {
+          const file = item.getAsFile()!;
+          return { file, previewUrl: URL.createObjectURL(file) };
+        });
+        onFilesAdded(newFiles);
+        return;
+      }
 
-      if (!hasGifHtml && !hasImageFiles) return;
-      e.preventDefault();
-
-      if (hasGifHtml) {
-        htmlItem!.getAsString(async (html) => {
+      // Проверяем GIF из HTML (например из Tenor/Giphy)
+      const htmlItem = items.find(
+        (i) => i.kind === "string" && i.type === "text/html",
+      );
+      if (htmlItem && remaining > 0) {
+        htmlItem.getAsString(async (html) => {
           const match = html.match(/<img[^>]+src="([^"]+\.gif[^"]*)"/);
-          if (!match) return;
-
+          if (!match) return; // не GIF — не трогаем, текст вставится сам
           try {
             const response = await fetch(match[1]);
             const blob = await response.blob();
@@ -104,16 +105,7 @@ export default function ChatInput({
             console.warn("Failed to fetch GIF:", match[1]);
           }
         });
-        return;
       }
-
-      // Обычные файлы
-      const toAdd = fileItems.slice(0, remaining);
-      const newFiles: PendingFile[] = toAdd.map((item) => {
-        const file = item.getAsFile()!;
-        return { file, previewUrl: URL.createObjectURL(file) };
-      });
-      onFilesAdded(newFiles);
     },
     [onFilesAdded, remaining],
   );
@@ -166,34 +158,6 @@ export default function ChatInput({
         </div>
       )}
 
-      {forwardFrom && (
-        <div
-          style={{
-            padding: "6px 12px",
-            background: "#898989",
-            borderLeft: "3px solid #4a9eff",
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: 13,
-          }}
-        >
-          <span>
-            ↪ Пересылка: {forwardFrom.text.slice(0, 60)}
-            {forwardFrom.text.length > 60 ? "..." : ""}
-          </span>
-          <button
-            onClick={onCancelForward}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#aaa",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
       {/* Превью выбранных файлов */}
       {pendingFiles.length > 0 && (
         <div style={styles.pendingFiles}>

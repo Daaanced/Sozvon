@@ -61,6 +61,45 @@ func (d *Database) GetAttachmentsByMessageIDs(ctx context.Context, messageIDs []
 	return result, nil
 }
 
+// После основного запроса attachments добавить:
+func (d *Database) GetForwardedAttachmentsByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]models.Attachment, error) {
+	if len(messageIDs) == 0 {
+		return map[string][]models.Attachment{}, nil
+	}
+
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, len(messageIDs))
+	for i, id := range messageIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(
+		`SELECT fa.message_id, a.id, a.file_name, a.store_name, a.mime_type, a.size
+		 FROM forwarded_attachments fa
+		 JOIN attachments a ON a.id = fa.attachment_id
+		 WHERE fa.message_id IN (%s)`,
+		joinStrings(placeholders),
+	)
+
+	rows, err := d.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]models.Attachment)
+	for rows.Next() {
+		var msgID string
+		var a models.Attachment
+		if err := rows.Scan(&msgID, &a.ID, &a.FileName, &a.StoreName, &a.MimeType, &a.Size); err != nil {
+			return nil, err
+		}
+		result[msgID] = append(result[msgID], a)
+	}
+	return result, nil
+}
+
 // GetAttachmentByID возвращает вложение по ID
 func (d *Database) GetAttachmentByID(ctx context.Context, attachmentID string) (*models.Attachment, error) {
 	var a models.Attachment

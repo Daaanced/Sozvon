@@ -31,6 +31,7 @@ type ChatListItem struct {
 	Members     []int     `json:"members"`
 	LastMessage string    `json:"lastMessage"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+	UnreadCount int       `json:"unreadCount"`
 }
 
 // Attachment — вложение к сообщению
@@ -44,16 +45,26 @@ type Attachment struct {
 	URL       string `json:"url"` // заполняется при отдаче, не хранится в БД
 }
 
+type ForwardedMeta struct {
+	OriginalMessageID *string      `json:"originalMessageId,omitempty"`
+	SenderID          int          `json:"senderId"`
+	Text              string       `json:"text"`
+	Attachments       []Attachment `json:"attachments,omitempty"`
+}
+
 type Message struct {
-	ID              string        `json:"id"`
-	ChatID          string        `json:"chatId"`
-	SenderID        int           `json:"senderId"`
-	Text            string        `json:"text"`
-	ReplyToID       *string       `json:"replyToId,omitempty"`
-	ReplyToMessage  *ReplyPreview `json:"replyToMessage,omitempty"`
-	ForwardedFromID *string       `json:"forwardedFromId,omitempty"`
-	Attachments     []Attachment  `json:"attachments,omitempty"`
-	CreatedAt       time.Time     `json:"createdAt"`
+	ID                   string         `json:"id"`
+	ChatID               string         `json:"chatId"`
+	SenderID             int            `json:"senderId"`
+	Text                 string         `json:"text"`
+	ReplyToID            *string        `json:"replyToId,omitempty"`
+	ReplyToMessage       *ReplyPreview  `json:"replyToMessage,omitempty"`
+	ForwardedFrom        *ForwardedMeta `json:"forwardedFrom,omitempty"`
+	EditedAt             *time.Time     `json:"editedAt,omitempty"`
+	DeletedAt            *time.Time     `json:"deletedAt,omitempty"`
+	Attachments          []Attachment   `json:"attachments,omitempty"`
+	ForwardedAttachments []Attachment   `json:"forwardedAttachments,omitempty"`
+	CreatedAt            time.Time      `json:"createdAt"`
 }
 
 type ReplyPreview struct {
@@ -78,13 +89,32 @@ func (r *CreateChatRequest) Validate() error {
 }
 
 type SendMessageRequest struct {
-	Text            string  `json:"text"`
-	ReplyToID       *string `json:"replyToId,omitempty"`
-	ForwardedFromID *string `json:"forwardedFromId,omitempty"`
+	Text      string  `json:"text"`
+	ReplyToID *string `json:"replyToId,omitempty"`
+}
+
+type ForwardMessagesRequest struct {
+	MessageIDs  []string `json:"messageIds"`
+	ToChatID    string   `json:"toChatId"`
+	CommentText string   `json:"commentText,omitempty"`
+}
+
+type EditMessageRequest struct {
+	Text string `json:"text"`
+}
+
+func (r *ForwardMessagesRequest) Validate() error {
+	if len(r.MessageIDs) == 0 {
+		return errors.New("messageIds required")
+	}
+	if r.ToChatID == "" {
+		return errors.New("toChatId required")
+	}
+	return nil
 }
 
 func (r *SendMessageRequest) Validate() error {
-	if r.ForwardedFromID == nil && r.Text == "" {
+	if r.Text == "" {
 		return ErrEmptyMessage
 	}
 	if len(r.Text) > MaxMessageLength {

@@ -53,44 +53,62 @@ func (d *Database) Close() error {
 func (d *Database) Migrate() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS chats (
-			id         UUID      PRIMARY KEY,
-			active     BOOLEAN   NOT NULL DEFAULT FALSE,
-			type       TEXT      NOT NULL DEFAULT 'direct',
-			name       TEXT,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW()
-		);
+		id         UUID      PRIMARY KEY,
+		active     BOOLEAN   NOT NULL DEFAULT FALSE,
+		type       TEXT      NOT NULL DEFAULT 'direct',
+		name       TEXT,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
 
-		CREATE TABLE IF NOT EXISTS chat_members (
-			chat_id UUID    REFERENCES chats(id) ON DELETE CASCADE,
-			user_id INTEGER NOT NULL,
-			PRIMARY KEY (chat_id, user_id)
-		);
+	CREATE TABLE IF NOT EXISTS chat_members (
+		chat_id             UUID    REFERENCES chats(id) ON DELETE CASCADE,
+		user_id             INTEGER NOT NULL,
+		last_read_message_id UUID   REFERENCES messages(id) ON DELETE SET NULL,
+		PRIMARY KEY (chat_id, user_id)
+	);
 
-		CREATE TABLE IF NOT EXISTS messages (
-			id               UUID      PRIMARY KEY,
-			chat_id          UUID      REFERENCES chats(id)    ON DELETE CASCADE,
-			sender_id        INTEGER   NOT NULL,
-			text             TEXT      NOT NULL,
-			reply_to_id      UUID      REFERENCES messages(id) ON DELETE SET NULL,
-			forwarded_from_id UUID     REFERENCES messages(id) ON DELETE SET NULL,
-			created_at       TIMESTAMP NOT NULL DEFAULT NOW()
-		);
+	CREATE TABLE IF NOT EXISTS messages (
+		id               UUID      PRIMARY KEY,
+		chat_id          UUID      REFERENCES chats(id)    ON DELETE CASCADE,
+		sender_id        INTEGER   NOT NULL,
+		text             TEXT      NOT NULL DEFAULT '',
+		reply_to_id      UUID      REFERENCES messages(id) ON DELETE SET NULL,
+		-- пересылка: снимок
+		forwarded_sender_id        INTEGER,
+		forwarded_text             TEXT,
+		forwarded_from_message_id  UUID,    -- только ref для отображения источника, без FK
+		-- редактирование
+		edited_at        TIMESTAMP,
+		-- soft delete (показывать "сообщение удалено" вместо скрытия)
+		deleted_at       TIMESTAMP,
+		created_at       TIMESTAMP NOT NULL DEFAULT NOW()
+	);
 
-		CREATE TABLE IF NOT EXISTS attachments (
-			id         UUID    PRIMARY KEY,
-			message_id UUID    REFERENCES messages(id) ON DELETE CASCADE,
-			file_name  TEXT    NOT NULL,
-			store_name TEXT    NOT NULL,
-			mime_type  TEXT    NOT NULL,
-			size       BIGINT  NOT NULL
-		);
+	CREATE TABLE IF NOT EXISTS attachments (
+		id         UUID    PRIMARY KEY,
+		message_id UUID    REFERENCES messages(id) ON DELETE CASCADE,
+		file_name  TEXT    NOT NULL,
+		store_name TEXT    NOT NULL,
+		mime_type  TEXT    NOT NULL,
+		size       BIGINT  NOT NULL
+	);
 
-		CREATE INDEX IF NOT EXISTS idx_attachments_message_id   ON attachments(message_id);
-		CREATE INDEX IF NOT EXISTS idx_messages_chat_id_created ON messages(chat_id, created_at);
-		CREATE INDEX IF NOT EXISTS idx_messages_reply_to        ON messages(reply_to_id);
-		CREATE INDEX IF NOT EXISTS idx_chats_active             ON chats(active);
-		CREATE INDEX IF NOT EXISTS idx_chats_type               ON chats(type);
-		CREATE INDEX IF NOT EXISTS idx_chat_members_user_id     ON chat_members(user_id);
+	-- Вложения пересланных сообщений (ссылки на те же файлы)
+	CREATE TABLE IF NOT EXISTS forwarded_attachments (
+		message_id    UUID REFERENCES messages(id)    ON DELETE CASCADE,
+		attachment_id UUID REFERENCES attachments(id) ON DELETE CASCADE,
+		PRIMARY KEY (message_id, attachment_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_attachments_message_id        ON attachments(message_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_chat_id_created      ON messages(chat_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_messages_reply_to             ON messages(reply_to_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_forwarded_from       ON messages(forwarded_from_message_id);
+	CREATE INDEX IF NOT EXISTS idx_chats_active                  ON chats(active);
+	CREATE INDEX IF NOT EXISTS idx_chats_type                    ON chats(type);
+	CREATE INDEX IF NOT EXISTS idx_chat_members_user_id          ON chat_members(user_id);
+	CREATE INDEX IF NOT EXISTS idx_chat_members_last_read        ON chat_members(last_read_message_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_deleted_at           ON messages(deleted_at);
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -197,27 +215,181 @@ func (d *Database) IsMember(ctx context.Context, chatID string, userID int) (boo
 }
 
 // SaveMessage сохраняет сообщение, sender — user_id
-func (d *Database) SaveMessage(ctx context.Context, chatID string, senderID int, text string, replyToID *string, forwardedFromID *string) (*models.Message, error) {
+func (d *Database) SaveMessage(ctx context.Context, chatID string, senderID int, text string, replyToID *string) (*models.Message, error) {
 	messageID := uuid.NewString()
 	now := time.Now()
 
 	_, err := d.db.ExecContext(ctx,
-		`INSERT INTO messages (id, chat_id, sender_id, text, reply_to_id, forwarded_from_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		messageID, chatID, senderID, text, replyToID, forwardedFromID, now,
+		`INSERT INTO messages (id, chat_id, sender_id, text, reply_to_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		messageID, chatID, senderID, text, replyToID, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save message: %w", err)
 	}
 
 	return &models.Message{
-		ID:              messageID,
-		ChatID:          chatID,
-		SenderID:        senderID,
-		Text:            text,
-		ReplyToID:       replyToID,
-		ForwardedFromID: forwardedFromID,
-		CreatedAt:       now,
+		ID:        messageID,
+		ChatID:    chatID,
+		SenderID:  senderID,
+		Text:      text,
+		ReplyToID: replyToID,
+		CreatedAt: now,
 	}, nil
+}
+
+func (d *Database) SaveForwardedMessages(ctx context.Context, toChatID string, senderID int, originalIDs []string) ([]*models.Message, error) {
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var result []*models.Message
+	now := time.Now()
+
+	for _, origID := range originalIDs {
+		// Читаем оригинал
+		var orig models.Message
+		var fwdSenderID sql.NullInt64
+		var fwdText sql.NullString
+		var fwdOrigID sql.NullString
+
+		err := d.db.QueryRowContext(ctx,
+			`SELECT id, sender_id, text, forwarded_sender_id, forwarded_text, forwarded_from_message_id
+			 FROM messages WHERE id = $1 AND deleted_at IS NULL`,
+			origID,
+		).Scan(&orig.ID, &orig.SenderID, &orig.Text, &fwdSenderID, &fwdText, &fwdOrigID)
+		if err != nil {
+			return nil, fmt.Errorf("original message not found: %w", err)
+		}
+
+		// Снимок: если оригинал сам пересланный — берём его снимок
+		snapshotSenderID := orig.SenderID
+		snapshotText := orig.Text
+		snapshotOrigID := &orig.ID
+		if fwdSenderID.Valid {
+			snapshotSenderID = int(fwdSenderID.Int64)
+			snapshotText = fwdText.String
+			if fwdOrigID.Valid {
+				snapshotOrigID = &fwdOrigID.String
+			}
+		}
+
+		newID := uuid.NewString()
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO messages (id, chat_id, sender_id, text, forwarded_sender_id, forwarded_text, forwarded_from_message_id, created_at)
+			 VALUES ($1, $2, $3, '', $4, $5, $6, $7)`,
+			newID, toChatID, senderID, snapshotSenderID, snapshotText, snapshotOrigID, now,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert forwarded message: %w", err)
+		}
+
+		// Копируем ссылки на вложения через forwarded_attachments
+		attRows, err := d.db.QueryContext(ctx,
+			`SELECT id FROM attachments WHERE message_id = $1`, origID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for attRows.Next() {
+			var attID string
+			if err := attRows.Scan(&attID); err != nil {
+				attRows.Close()
+				return nil, err
+			}
+			_, err = tx.ExecContext(ctx,
+				`INSERT INTO forwarded_attachments (message_id, attachment_id) VALUES ($1, $2)`,
+				newID, attID,
+			)
+			if err != nil {
+				attRows.Close()
+				return nil, err
+			}
+		}
+		attRows.Close()
+
+		result = append(result, &models.Message{
+			ID:        newID,
+			ChatID:    toChatID,
+			SenderID:  senderID,
+			CreatedAt: now,
+			ForwardedFrom: &models.ForwardedMeta{
+				OriginalMessageID: snapshotOrigID,
+				SenderID:          snapshotSenderID,
+				Text:              snapshotText,
+			},
+		})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	return result, nil
+}
+
+func (d *Database) EditMessage(ctx context.Context, messageID string, senderID int, newText string) error {
+	result, err := d.db.ExecContext(ctx,
+		`UPDATE messages SET text = $1, edited_at = NOW()
+		 WHERE id = $2 AND sender_id = $3 AND deleted_at IS NULL`,
+		newText, messageID, senderID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to edit message: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("message not found or not yours")
+	}
+	return nil
+}
+
+func (d *Database) DeleteMessage(ctx context.Context, messageID string, senderID int) ([]string, error) {
+	// Проверяем авторство
+	var ownerID int
+	err := d.db.QueryRowContext(ctx,
+		`SELECT sender_id FROM messages WHERE id = $1 AND deleted_at IS NULL`,
+		messageID,
+	).Scan(&ownerID)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("message not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ownerID != senderID {
+		return nil, fmt.Errorf("not your message")
+	}
+
+	// Получаем store_name вложений для удаления файлов
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT store_name FROM attachments WHERE message_id = $1`, messageID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var storeNames []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		storeNames = append(storeNames, s)
+	}
+
+	// Физическое удаление — attachments каскадно удалятся
+	_, err = d.db.ExecContext(ctx,
+		`DELETE FROM messages WHERE id = $1`, messageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete message: %w", err)
+	}
+
+	return storeNames, nil
 }
 
 // ActivateChat активирует чат при первом сообщении
@@ -238,27 +410,38 @@ func (d *Database) ActivateChat(ctx context.Context, chatID string) (bool, error
 
 // GetUserChats возвращает список активных чатов пользователя
 func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatListItem, error) {
+	// Заменить GetUserChats query:
 	query := `
 		SELECT
 			c.id,
 			c.type,
 			COALESCE(c.name, '') AS name,
-			array_agg(cm.user_id) AS members,
-			COALESCE(m.text, '')              AS last_message,
-			COALESCE(m.created_at, c.created_at) AS updated_at
+			array_agg(cm2.user_id) AS members,
+			COALESCE(m.text, '') AS last_message,
+			COALESCE(m.created_at, c.created_at) AS updated_at,
+			COALESCE((
+				SELECT COUNT(*) FROM messages unread
+				WHERE unread.chat_id = c.id
+				AND unread.sender_id != $1
+				AND unread.deleted_at IS NULL
+				AND (
+					cm_me.last_read_message_id IS NULL
+					OR unread.created_at > (
+						SELECT created_at FROM messages
+						WHERE id = cm_me.last_read_message_id
+					)
+				)
+			), 0) AS unread_count
 		FROM chats c
-		JOIN chat_members cm ON cm.chat_id = c.id
+		JOIN chat_members cm_me ON cm_me.chat_id = c.id AND cm_me.user_id = $1
+		JOIN chat_members cm2 ON cm2.chat_id = c.id
 		LEFT JOIN LATERAL (
-			SELECT text, created_at
-			FROM messages
-			WHERE chat_id = c.id
-			ORDER BY created_at DESC
-			LIMIT 1
+			SELECT text, created_at FROM messages
+			WHERE chat_id = c.id AND deleted_at IS NULL
+			ORDER BY created_at DESC LIMIT 1
 		) m ON true
-		WHERE c.id IN (
-			SELECT chat_id FROM chat_members WHERE user_id = $1
-		) AND c.active = true
-		GROUP BY c.id, c.type, c.name, m.text, m.created_at, c.created_at
+		WHERE c.active = true
+		GROUP BY c.id, c.type, c.name, m.text, m.created_at, c.created_at, cm_me.last_read_message_id
 		ORDER BY COALESCE(m.created_at, c.created_at) DESC
 	`
 
@@ -273,7 +456,7 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 		var item models.ChatListItem
 		var members pqIntArray
 
-		if err := rows.Scan(&item.ChatID, &item.Type, &item.Name, &members, &item.LastMessage, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ChatID, &item.Type, &item.Name, &members, &item.LastMessage, &item.UpdatedAt, &item.UnreadCount); err != nil {
 			return nil, fmt.Errorf("failed to scan chat: %w", err)
 		}
 
@@ -288,14 +471,15 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, offset int) ([]models.Message, error) {
 	rows, err := d.db.QueryContext(ctx,
 		`SELECT
-        m.id, m.chat_id, m.sender_id, m.text,
-        m.reply_to_id, m.forwarded_from_id, m.created_at,
-        r.id, r.sender_id, r.text
-    FROM messages m
-    LEFT JOIN messages r ON r.id = m.reply_to_id
-    WHERE m.chat_id = $1
-    ORDER BY m.created_at ASC
-    LIMIT $2 OFFSET $3`,
+			m.id, m.chat_id, m.sender_id, m.text,
+			m.reply_to_id, m.edited_at, m.deleted_at, m.created_at,
+			r.id, r.sender_id, r.text,
+			m.forwarded_sender_id, m.forwarded_text, m.forwarded_from_message_id
+		FROM messages m
+		LEFT JOIN messages r ON r.id = m.reply_to_id AND r.deleted_at IS NULL
+		WHERE m.chat_id = $1
+		ORDER BY m.created_at ASC
+		LIMIT $2 OFFSET $3`,
 		chatID, limit, offset,
 	)
 	if err != nil {
@@ -304,19 +488,18 @@ func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, of
 	defer rows.Close()
 
 	var messages []models.Message
-
 	for rows.Next() {
 		var msg models.Message
-		var replyID sql.NullString
-		var replyFwdID sql.NullString
-		var rID sql.NullString
-		var rSenderID sql.NullInt64
-		var rText sql.NullString
+		var replyID, rID, fwdOrigID sql.NullString
+		var rSenderID, fwdSenderID sql.NullInt64
+		var rText, fwdText sql.NullString
+		var editedAt, deletedAt sql.NullTime
 
 		if err := rows.Scan(
 			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text,
-			&replyID, &replyFwdID, &msg.CreatedAt,
+			&replyID, &editedAt, &deletedAt, &msg.CreatedAt,
 			&rID, &rSenderID, &rText,
+			&fwdSenderID, &fwdText, &fwdOrigID,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
@@ -324,14 +507,31 @@ func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, of
 		if replyID.Valid {
 			msg.ReplyToID = &replyID.String
 		}
-		if replyFwdID.Valid {
-			msg.ForwardedFromID = &replyFwdID.String
+		if editedAt.Valid {
+			msg.EditedAt = &editedAt.Time
 		}
-		if rID.Valid {
+		if deletedAt.Valid {
+			msg.DeletedAt = &deletedAt.Time
+			// Затираем содержимое удалённого сообщения
+			msg.Text = ""
+			msg.Attachments = nil
+		}
+		if rID.Valid && deletedAt.Valid == false {
 			msg.ReplyToMessage = &models.ReplyPreview{
 				ID:       rID.String,
 				SenderID: int(rSenderID.Int64),
 				Text:     rText.String,
+			}
+		}
+		if fwdSenderID.Valid {
+			origID := (*string)(nil)
+			if fwdOrigID.Valid {
+				origID = &fwdOrigID.String
+			}
+			msg.ForwardedFrom = &models.ForwardedMeta{
+				OriginalMessageID: origID,
+				SenderID:          int(fwdSenderID.Int64),
+				Text:              fwdText.String,
 			}
 		}
 
@@ -341,10 +541,21 @@ func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, of
 	return messages, nil
 }
 
+func (d *Database) MarkChatRead(ctx context.Context, chatID string, userID int, lastMessageID string) error {
+	_, err := d.db.ExecContext(ctx,
+		`UPDATE chat_members SET last_read_message_id = $1
+		 WHERE chat_id = $2 AND user_id = $3`,
+		lastMessageID, chatID, userID,
+	)
+	return err
+}
+
 func (d *Database) GetMessagesAroundID(ctx context.Context, chatID string, messageID string, around int) ([]models.Message, error) {
 	query := `
 		WITH ranked AS (
-			SELECT id, chat_id, sender_id, text, reply_to_id, forwarded_from_id, created_at,
+			SELECT id, chat_id, sender_id, text, reply_to_id, edited_at, deleted_at,
+			       forwarded_sender_id, forwarded_text, forwarded_from_message_id,
+			       created_at,
 			       ROW_NUMBER() OVER (ORDER BY created_at ASC) AS rn
 			FROM messages
 			WHERE chat_id = $1
@@ -352,7 +563,9 @@ func (d *Database) GetMessagesAroundID(ctx context.Context, chatID string, messa
 		target_rn AS (
 			SELECT rn FROM ranked WHERE id = $2
 		)
-		SELECT id, chat_id, sender_id, text, reply_to_id, forwarded_from_id, created_at
+		SELECT id, chat_id, sender_id, text, reply_to_id, edited_at, deleted_at,
+		       forwarded_sender_id, forwarded_text, forwarded_from_message_id,
+		       created_at
 		FROM ranked
 		WHERE rn BETWEEN (SELECT rn FROM target_rn) - $3
 		              AND (SELECT rn FROM target_rn) + $3
@@ -367,9 +580,43 @@ func (d *Database) GetMessagesAroundID(ctx context.Context, chatID string, messa
 	var messages []models.Message
 	for rows.Next() {
 		var msg models.Message
-		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text, &msg.ReplyToID, &msg.ForwardedFromID, &msg.CreatedAt); err != nil {
+		var replyID, fwdOrigID sql.NullString
+		var fwdSenderID sql.NullInt64
+		var fwdText sql.NullString
+		var editedAt, deletedAt sql.NullTime
+
+		if err := rows.Scan(
+			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text,
+			&replyID, &editedAt, &deletedAt,
+			&fwdSenderID, &fwdText, &fwdOrigID,
+			&msg.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
+
+		if replyID.Valid {
+			msg.ReplyToID = &replyID.String
+		}
+		if editedAt.Valid {
+			msg.EditedAt = &editedAt.Time
+		}
+		if deletedAt.Valid {
+			msg.DeletedAt = &deletedAt.Time
+			msg.Text = ""
+			msg.Attachments = nil
+		}
+		if fwdSenderID.Valid {
+			origID := (*string)(nil)
+			if fwdOrigID.Valid {
+				origID = &fwdOrigID.String
+			}
+			msg.ForwardedFrom = &models.ForwardedMeta{
+				OriginalMessageID: origID,
+				SenderID:          int(fwdSenderID.Int64),
+				Text:              fwdText.String,
+			}
+		}
+
 		messages = append(messages, msg)
 	}
 	return messages, nil

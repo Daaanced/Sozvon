@@ -11,6 +11,9 @@ type Props = {
   onImageClick: (url: string) => void;
   onReply: (message: Message) => void;
   onForward: (message: Message) => void;
+  onEdit: (message: Message) => void;
+  onDelete: (message: Message) => void;
+  myId: number;
   highlightId: string | null;
   onScrollToMessage: (
     id: string,
@@ -34,6 +37,9 @@ export default function ChatMessages({
   onImageClick,
   onReply,
   onForward,
+  onEdit,
+  onDelete,
+  myId,
   highlightId,
   onScrollToMessage,
 }: Props) {
@@ -72,11 +78,15 @@ export default function ChatMessages({
             onImageClick={onImageClick}
             onReply={onReply}
             onForward={onForward}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            myId={myId}
             onScrollToMessage={handleScrollToMessage}
             highlight={m.id === highlightId}
             setRef={(el) => {
               messageRefs.current[m.id] = el;
             }}
+            getUser={getUser}
           />
         );
       })}

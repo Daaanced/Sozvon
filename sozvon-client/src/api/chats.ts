@@ -24,15 +24,10 @@ export function getMessagesContext(chatId: string, messageId: string) {
   return requestAuth(`/chats/${chatId}/messages/${messageId}/context`);
 }
 
-export function sendMessage(
-  chatId: string,
-  text: string,
-  replyToId?: string,
-  forwardedFromId?: string,
-) {
+export function sendMessage(chatId: string, text: string, replyToId?: string) {
   return requestAuth(`/chats/${chatId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ text, replyToId, forwardedFromId }),
+    body: JSON.stringify({ text, replyToId }),
   });
 }
 
@@ -42,7 +37,6 @@ export function uploadFiles(
   text: string,
   files: File[],
   replyToId?: string,
-  forwardedFromId?: string,
   onProgress?: (percent: number) => void,
 ): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -54,7 +48,6 @@ export function uploadFiles(
     }
 
     if (replyToId) formData.append("replyToId", replyToId);
-    if (forwardedFromId) formData.append("forwardedFromId", forwardedFromId);
 
     files.forEach((file) => formData.append("files", file));
 
@@ -84,4 +77,39 @@ export function uploadFiles(
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
   });
+}
+
+export function forwardMessages(
+  messageIds: string[],
+  toChatId: string,
+  commentText?: string,
+) {
+  return requestAuth("/chats/forward", {
+    method: "POST",
+    body: JSON.stringify({ messageIds, toChatId, commentText }),
+  });
+}
+
+export function editMessage(chatId: string, messageId: string, text: string) {
+  return requestAuth(`/chats/${chatId}/messages/${messageId}`, {
+    method: "PUT",
+    body: JSON.stringify({ text }),
+  });
+}
+
+export function deleteMessage(chatId: string, messageId: string) {
+  return requestAuth(`/chats/${chatId}/messages/${messageId}`, {
+    method: "DELETE",
+  });
+}
+
+export function markRead(chatId: string, lastMessageId: string) {
+  return requestAuth(`/chats/${chatId}/read`, {
+    method: "POST",
+    body: JSON.stringify({ lastMessageId }),
+  });
+}
+
+export function getChatInfo(chatId: string) {
+  return requestAuth(`/chats/${chatId}`);
 }

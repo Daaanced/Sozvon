@@ -7,11 +7,13 @@ import {
   sendMessage,
   uploadFiles,
 } from "../../api/chats";
+import { editMessage, deleteMessage } from "../../api/chats";
 import { useChatContext } from "../../context/ChatContext";
 import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import ChatTopBar from "./ChatTopBar";
 import Lightbox from "./Lightbox";
+import ForwardModal from "./ForwardModal";
 import { styles } from "./chat.styles";
 import type { Message, PendingFile } from "./chat.types";
 
@@ -28,8 +30,12 @@ export default function Chat({ chatId }: Props) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [forwardFrom, setForwardFrom] = useState<Message | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
+    null,
+  );
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [editText, setEditText] = useState("");
   // Находим собеседника по chatId
   const chat = chats.find((c) => c.chatId === chatId);
   const withId = chat?.members.find((m) => m !== myId);
@@ -115,6 +121,38 @@ export default function Chat({ chatId }: Props) {
     }
   }
 
+  async function handleEdit(msg: Message) {
+    setEditingMessage(msg);
+    setEditText(msg.text);
+  }
+
+  async function submitEdit() {
+    if (!editingMessage) return;
+    try {
+      await editMessage(chatId, editingMessage.id, editText);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === editingMessage.id
+            ? { ...m, text: editText, editedAt: new Date().toISOString() }
+            : m,
+        ),
+      );
+      setEditingMessage(null);
+    } catch (e) {
+      console.error("Edit failed:", e);
+    }
+  }
+
+  async function handleDelete(msg: Message) {
+    if (!confirm("Удалить сообщение?")) return;
+    try {
+      await deleteMessage(chatId, msg.id);
+      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    } catch (e) {
+      console.error("Delete failed:", e);
+    }
+  }
+
   async function send() {
     const trimmed = text.trim();
     const hasFiles = pendingFiles.length > 0;
@@ -136,13 +174,12 @@ export default function Chat({ chatId }: Props) {
           trimmed,
           files,
           replyTo?.id,
-          forwardFrom?.id,
           setUploadProgress,
         );
+
         setMessages((prev) => [...prev, msg]);
         notifyOwnMessage(chatId);
         setReplyTo(null);
-        setForwardFrom(null);
       } catch (e) {
         console.error("Upload failed:", e);
         setText(trimmed);
@@ -152,16 +189,10 @@ export default function Chat({ chatId }: Props) {
       }
     } else {
       try {
-        const msg = await sendMessage(
-          chatId,
-          trimmed,
-          replyTo?.id,
-          forwardFrom?.id,
-        );
+        const msg = await sendMessage(chatId, trimmed, replyTo?.id);
         setMessages((prev) => [...prev, msg]);
         notifyOwnMessage(chatId);
         setReplyTo(null);
-        setForwardFrom(null);
       } catch (e) {
         console.error("Send failed:", e);
         setText(trimmed);
@@ -173,6 +204,82 @@ export default function Chat({ chatId }: Props) {
     <div style={styles.chatWrapper}>
       {lightboxUrl && (
         <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      )}
+
+      {forwardingMessage && (
+        <ForwardModal
+          message={forwardingMessage}
+          onClose={() => setForwardingMessage(null)}
+          onDone={() => {}}
+        />
+      )}
+
+      {editingMessage && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              width: 400,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>Редактировать сообщение</div>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={4}
+              style={{
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                fontSize: 14,
+                resize: "vertical",
+              }}
+            />
+            <div
+              style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
+            >
+              <button
+                onClick={() => setEditingMessage(null)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                  cursor: "pointer",
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={submitEdit}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  background: "#4a90e2",
+                  color: "#fff",
+                }}
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Верхний бар */}
@@ -187,7 +294,10 @@ export default function Chat({ chatId }: Props) {
         getUser={getSafeUser}
         onImageClick={setLightboxUrl}
         onReply={setReplyTo}
-        onForward={setForwardFrom}
+        onForward={setForwardingMessage}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        myId={myId}
         highlightId={highlightId}
         onScrollToMessage={scrollToMessage}
       />
@@ -198,9 +308,7 @@ export default function Chat({ chatId }: Props) {
         uploading={uploading}
         uploadProgress={uploadProgress}
         replyTo={replyTo}
-        forwardFrom={forwardFrom}
         onCancelReply={() => setReplyTo(null)}
-        onCancelForward={() => setForwardFrom(null)}
         onTextChange={setText}
         onSend={send}
         onFilesAdded={handleFilesAdded}

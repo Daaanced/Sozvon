@@ -12,15 +12,28 @@ type Props = {
   onImageClick: (url: string) => void;
   onReply: (message: Message) => void;
   onForward: (message: Message) => void;
+  onEdit: (message: Message) => void;
+  onDelete: (message: Message) => void;
+  myId: number;
   onScrollToMessage: (id: string) => void;
   highlight: boolean;
   setRef: (el: HTMLDivElement | null) => void;
+  getUser: (id: number) => User;
+};
+
+const btnStyle: React.CSSProperties = {
+  background: "rgba(148,144,144,0.92)",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
+  padding: "2px 8px",
+  fontSize: 16,
+  lineHeight: "22px",
 };
 
 function isImage(mimeType: string) {
   return mimeType.startsWith("image/");
 }
-
 function isVideo(mimeType: string) {
   return mimeType.startsWith("video/");
 }
@@ -47,7 +60,6 @@ function formatFullDate(dateString: string) {
   );
 }
 
-// Заменить строку export default function:
 export default function MessageBubble({
   message: m,
   user,
@@ -55,10 +67,18 @@ export default function MessageBubble({
   onImageClick,
   onReply,
   onForward,
+  onEdit,
+  onDelete,
   onScrollToMessage,
   highlight,
   setRef,
+  myId,
+  getUser,
 }: Props) {
+  const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const isOwn = m.senderId === myId;
   const imageAttachments =
     m.attachments?.filter((a) => isImage(a.mimeType)) ?? [];
   const videoAttachments =
@@ -68,13 +88,58 @@ export default function MessageBubble({
       (a) => !isImage(a.mimeType) && !isVideo(a.mimeType),
     ) ?? [];
   const multipleImages = imageAttachments.length > 1;
-  const [hovered, setHovered] = useState(false);
+
+  function closeMenu() {
+    setMenuOpen(false);
+    setHovered(false);
+  }
+
+  const menuItems = [
+    {
+      label: "↩ Ответить",
+      action: () => {
+        onReply(m);
+        closeMenu();
+      },
+    },
+    {
+      label: "↪ Переслать",
+      action: () => {
+        onForward(m);
+        closeMenu();
+      },
+    },
+    ...(isOwn && !m.deletedAt
+      ? [
+          {
+            label: "✏️ Изменить",
+            action: () => {
+              onEdit(m);
+              closeMenu();
+            },
+          },
+          {
+            label: "🗑 Удалить",
+            action: () => {
+              onDelete(m);
+              closeMenu();
+            },
+            danger: true,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div
       ref={setRef}
+      data-bubble="true"
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={(e) => {
+        // Не скрывать если мышь ушла на дочерний элемент (напр. меню)
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        if (!menuOpen) setHovered(false);
+      }}
       style={{
         ...styles.groupStartWrapper,
         background: highlight ? "#c8f6f0" : hovered ? "#c9daed" : undefined,
@@ -82,7 +147,7 @@ export default function MessageBubble({
         position: "relative",
       }}
     >
-      {/* Левая колонка — аватар или время */}
+      {/* Левая колонка */}
       {isGroupStart ? (
         <img src={user.picture} style={styles.avatar} alt={user.name} />
       ) : (
@@ -100,38 +165,129 @@ export default function MessageBubble({
           </div>
         )}
 
+        {/* Ответ */}
         {m.replyToMessage && (
           <div
             onClick={() => onScrollToMessage(m.replyToMessage!.id)}
             style={{
               borderLeft: "3px solid #888",
-              paddingLeft: 8,
+              background: "rgba(180,180,180,0.12)",
+              borderRadius: "0 6px 6px 0",
+              padding: "6px 8px",
               marginBottom: 4,
-              opacity: 0.7,
               fontSize: 13,
               cursor: "pointer",
             }}
           >
-            ↩ {m.replyToMessage.text.slice(0, 80)}
-            {m.replyToMessage.text.length > 80 ? "..." : ""}
+            <div style={{ fontWeight: 600, marginBottom: 2, opacity: 0.8 }}>
+              {getUser(m.replyToMessage.senderId).name}
+            </div>
+            <div style={{ opacity: 0.7 }}>
+              {m.replyToMessage.text
+                ? m.replyToMessage.text.slice(0, 80) +
+                  (m.replyToMessage.text.length > 80 ? "..." : "")
+                : "📎 вложение"}
+            </div>
           </div>
         )}
 
-        {m.forwardedFromId && (
+        {/* Пересланное */}
+        {m.forwardedFrom && (
           <div
             style={{
               borderLeft: "3px solid #A4C7F0",
-              paddingLeft: 8,
+              background: "rgba(164,199,240,0.15)",
+              borderRadius: "0 6px 6px 0",
+              padding: "6px 8px",
               marginBottom: 4,
-              opacity: 0.7,
               fontSize: 13,
             }}
           >
-            ↪ Переслано
+            <div style={{ fontWeight: 600, marginBottom: 2, opacity: 0.8 }}>
+              ↪ {getUser(m.forwardedFrom.senderId).name}
+            </div>
+            {m.forwardedFrom.text && (
+              <div style={{ opacity: 0.7 }}>
+                {m.forwardedFrom.text.slice(0, 120)}
+                {m.forwardedFrom.text.length > 120 ? "..." : ""}
+              </div>
+            )}
+            {(m.forwardedFrom.attachments?.length ?? 0) > 0 && (
+              <div
+                style={{
+                  marginTop: 4,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 4,
+                }}
+              >
+                {m.forwardedFrom.attachments!.map((att) => {
+                  if (att.mimeType.startsWith("image/")) {
+                    return (
+                      <img
+                        key={att.id}
+                        src={att.url}
+                        alt={att.fileName}
+                        style={{
+                          maxWidth: 120,
+                          maxHeight: 80,
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          objectFit: "cover",
+                        }}
+                        onClick={() => onImageClick(att.url)}
+                      />
+                    );
+                  }
+                  if (att.mimeType.startsWith("video/")) {
+                    return (
+                      <video
+                        key={att.id}
+                        src={att.url}
+                        controls
+                        style={{ maxWidth: 200, borderRadius: 4 }}
+                      />
+                    );
+                  }
+                  return (
+                    <a
+                      key={att.id}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 12,
+                        opacity: 0.8,
+                      }}
+                    >
+                      <span>📎</span>
+                      <span>{att.fileName}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        {m.text && <div style={styles.messageText}>{m.text}</div>}
+        {/* Текст / удалено */}
+        {m.deletedAt ? (
+          <div
+            style={{ ...styles.messageText, opacity: 0.5, fontStyle: "italic" }}
+          >
+            Сообщение удалено
+          </div>
+        ) : (
+          <>
+            {m.text && <div style={styles.messageText}>{m.text}</div>}
+            {m.editedAt && (
+              <span style={{ fontSize: 11, opacity: 0.5 }}>(изменено)</span>
+            )}
+          </>
+        )}
 
         {/* Изображения */}
         {imageAttachments.length > 0 && (
@@ -187,49 +343,85 @@ export default function MessageBubble({
           </div>
         )}
 
+        {/* Кнопки действий */}
         {hovered && (
           <div
             style={{
               position: "absolute",
               top: 4,
               right: 8,
-              display: "flex",
-              gap: 4,
-              background: "rgba(148, 144, 144, 0.92)",
-              borderRadius: 8,
-              padding: "2px 6px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
               zIndex: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
             }}
           >
             <button
               onClick={() => onReply(m)}
               title="Ответить"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 16,
-                opacity: 0.85,
-                padding: "2px 4px",
-              }}
+              style={btnStyle}
             >
               ↩
             </button>
             <button
               onClick={() => onForward(m)}
               title="Переслать"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 16,
-                opacity: 0.85,
-                padding: "2px 4px",
-              }}
+              style={btnStyle}
             >
               ↪
             </button>
+
+            {/* Меню ••• */}
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setMenuOpen((v) => !v)} style={btnStyle}>
+                •••
+              </button>
+
+              {menuOpen && (
+                <div
+                  onMouseEnter={() => setHovered(true)}
+                  onMouseLeave={(e) => {
+                    // Закрываем только если мышь ушла за пределы пузыря
+                    const bubble = e.currentTarget.closest("[data-bubble]");
+                    if (bubble && bubble.contains(e.relatedTarget as Node))
+                      return;
+                    closeMenu();
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: 30,
+                    background: "#fff",
+                    borderRadius: 8,
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+                    minWidth: 160,
+                    zIndex: 20,
+                    overflow: "hidden",
+                  }}
+                >
+                  {menuItems.map((item) => (
+                    <div
+                      key={item.label}
+                      onClick={item.action}
+                      style={{
+                        padding: "8px 16px",
+                        cursor: "pointer",
+                        fontSize: 14,
+                        color: (item as any).danger ? "#e53935" : "#222",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background = "#f5f5f5")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = "transparent")
+                      }
+                    >
+                      {item.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
