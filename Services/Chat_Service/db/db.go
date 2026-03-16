@@ -286,29 +286,50 @@ func (d *Database) SaveForwardedMessages(ctx context.Context, toChatID string, s
 			return nil, fmt.Errorf("failed to insert forwarded message: %w", err)
 		}
 
-		// Копируем ссылки на вложения через forwarded_attachments
 		attRows, err := d.db.QueryContext(ctx,
 			`SELECT id FROM attachments WHERE message_id = $1`, origID,
 		)
 		if err != nil {
 			return nil, err
 		}
+		var attIDs []string
 		for attRows.Next() {
 			var attID string
 			if err := attRows.Scan(&attID); err != nil {
 				attRows.Close()
 				return nil, err
 			}
+			attIDs = append(attIDs, attID)
+		}
+		attRows.Close()
+
+		if len(attIDs) == 0 {
+			fwdRows, err := d.db.QueryContext(ctx,
+				`SELECT attachment_id FROM forwarded_attachments WHERE message_id = $1`, origID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			for fwdRows.Next() {
+				var attID string
+				if err := fwdRows.Scan(&attID); err != nil {
+					fwdRows.Close()
+					return nil, err
+				}
+				attIDs = append(attIDs, attID)
+			}
+			fwdRows.Close()
+		}
+
+		for _, attID := range attIDs {
 			_, err = tx.ExecContext(ctx,
 				`INSERT INTO forwarded_attachments (message_id, attachment_id) VALUES ($1, $2)`,
 				newID, attID,
 			)
 			if err != nil {
-				attRows.Close()
 				return nil, err
 			}
 		}
-		attRows.Close()
 
 		result = append(result, &models.Message{
 			ID:        newID,
@@ -478,7 +499,7 @@ func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, of
 		FROM messages m
 		LEFT JOIN messages r ON r.id = m.reply_to_id AND r.deleted_at IS NULL
 		WHERE m.chat_id = $1
-		ORDER BY m.created_at ASC
+		ORDER BY m.created_at DESC
 		LIMIT $2 OFFSET $3`,
 		chatID, limit, offset,
 	)
@@ -536,6 +557,11 @@ func (d *Database) GetChatMessages(ctx context.Context, chatID string, limit, of
 		}
 
 		messages = append(messages, msg)
+
+	}
+
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 
 	return messages, nil

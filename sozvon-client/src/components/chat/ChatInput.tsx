@@ -66,6 +66,7 @@ export default function ChatInput({
     };
   }, [onFilesAdded, remaining]);
 
+  const textInputRef = useRef<HTMLInputElement>(null);
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const items = Array.from(e.clipboardData.items);
@@ -109,6 +110,12 @@ export default function ChatInput({
     },
     [onFilesAdded, remaining],
   );
+
+  useEffect(() => {
+    if (replyTo) {
+      textInputRef.current?.focus();
+    }
+  }, [replyTo]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
@@ -225,6 +232,7 @@ export default function ChatInput({
         </button>
 
         <input
+          ref={textInputRef}
           style={styles.textInput}
           value={text}
           maxLength={4000}

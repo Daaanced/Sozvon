@@ -3,7 +3,8 @@
 import { styles } from "./chat.styles";
 import type { Message } from "./chat.types";
 import type { User } from "../../api/users";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   message: Message;
@@ -88,10 +89,40 @@ export default function MessageBubble({
       (a) => !isImage(a.mimeType) && !isVideo(a.mimeType),
     ) ?? [];
   const multipleImages = imageAttachments.length > 1;
+  const menuBtnRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
+    null,
+  );
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  function scheduleClose() {
+    closeTimerRef.current = setTimeout(() => closeMenu(), 700);
+  }
+
+  function cancelClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  }
   function closeMenu() {
     setMenuOpen(false);
     setHovered(false);
+  }
+
+  function handleMenuToggle() {
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
+    if (!menuBtnRef.current) return;
+    const rect = menuBtnRef.current.getBoundingClientRect();
+    const menuHeight = menuItems.length * 37; // ~37px на item
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    setMenuPos({
+      top:
+        spaceBelow < menuHeight ? rect.top - menuHeight - 4 : rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+    setMenuOpen(true);
   }
 
   const menuItems = [
@@ -372,56 +403,64 @@ export default function MessageBubble({
             </button>
 
             {/* Меню ••• */}
-            <div style={{ position: "relative" }}>
-              <button onClick={() => setMenuOpen((v) => !v)} style={btnStyle}>
+            <div
+              ref={menuBtnRef}
+              onMouseLeave={scheduleClose}
+              onMouseEnter={cancelClose}
+              style={{ position: "relative" }}
+            >
+              <button onClick={handleMenuToggle} style={btnStyle}>
                 •••
               </button>
-
-              {menuOpen && (
-                <div
-                  onMouseEnter={() => setHovered(true)}
-                  onMouseLeave={(e) => {
-                    // Закрываем только если мышь ушла за пределы пузыря
-                    const bubble = e.currentTarget.closest("[data-bubble]");
-                    if (bubble && bubble.contains(e.relatedTarget as Node))
-                      return;
-                    closeMenu();
-                  }}
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: 30,
-                    background: "#fff",
-                    borderRadius: 8,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                    minWidth: 160,
-                    zIndex: 20,
-                    overflow: "hidden",
-                  }}
-                >
-                  {menuItems.map((item) => (
-                    <div
-                      key={item.label}
-                      onClick={item.action}
-                      style={{
-                        padding: "8px 16px",
-                        cursor: "pointer",
-                        fontSize: 14,
-                        color: (item as any).danger ? "#e53935" : "#222",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f5f5f5")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                    >
-                      {item.label}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
+
+            {menuOpen &&
+              menuPos &&
+              createPortal(
+                <>
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 9998 }}
+                    onClick={closeMenu}
+                  />
+                  <div
+                    onMouseEnter={cancelClose}
+                    onMouseLeave={scheduleClose}
+                    style={{
+                      position: "fixed",
+                      top: menuPos.top,
+                      right: menuPos.right,
+                      background: "#fff",
+                      borderRadius: 8,
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+                      minWidth: 160,
+                      zIndex: 9999,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {menuItems.map((item) => (
+                      <div
+                        key={item.label}
+                        onClick={item.action}
+                        style={{
+                          padding: "8px 16px",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          color: (item as any).danger ? "#e53935" : "#222",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "#f5f5f5")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        {item.label}
+                      </div>
+                    ))}
+                  </div>
+                </>,
+                document.body,
+              )}
           </div>
         )}
       </div>
