@@ -336,4 +336,204 @@ export const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     lineHeight: 1,
   },
+    // Модалка редактирования
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
+  },
+
+  modalContent: {
+    background: "#fff",
+    borderRadius: 12,
+    padding: 24,
+    width: 400,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+
+  modalTitle: {
+    fontWeight: 600,
+  },
+
+  modalTextarea: {
+    padding: 8,
+    borderRadius: 8,
+    border: "1px solid #ddd",
+    fontSize: 14,
+    resize: "vertical" as const,
+  },
+
+  modalActions: {
+    display: "flex",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+
+  modalCancelBtn: {
+    padding: "6px 16px",
+    borderRadius: 8,
+    border: "1px solid #ddd",
+    cursor: "pointer",
+    background: "#fff",
+  },
+
+  modalSaveBtn: {
+    padding: "6px 16px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    background: "#4a90e2",
+    color: "#fff",
+  },
+  bubbleWrapper: {
+  position: "relative",
+  transition: "background 0.2s",
+},
+
+bubbleHover: {
+  background: "#c9daed",
+},
+
+bubbleHighlight: {
+  background: "#c8f6f0",
+},
+
+// reply
+replyBlock: {
+  borderLeft: "3px solid #888",
+  background: "rgba(180,180,180,0.12)",
+  borderRadius: "0 6px 6px 0",
+  padding: "6px 8px",
+  marginBottom: 4,
+  fontSize: 13,
+  cursor: "pointer",
+},
+
+replyAuthor: {
+  fontWeight: 600,
+  marginBottom: 2,
+  opacity: 0.8,
+},
+
+replyText: {
+  opacity: 0.7,
+},
+
+// forwarded
+forwardBlock: {
+  borderLeft: "3px solid #A4C7F0",
+  background: "rgba(164,199,240,0.15)",
+  borderRadius: "0 6px 6px 0",
+  padding: "6px 8px",
+  marginBottom: 4,
+  fontSize: 13,
+},
+
+forwardAuthor: {
+  fontWeight: 600,
+  marginBottom: 2,
+  opacity: 0.8,
+},
+
+forwardText: {
+  opacity: 0.7,
+},
+
+forwardAttachments: {
+  marginTop: 4,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 4,
+},
+
+forwardImage: {
+  maxWidth: 120,
+  maxHeight: 80,
+  borderRadius: 4,
+  cursor: "pointer",
+  objectFit: "cover" as const,
+},
+
+forwardVideo: {
+  maxWidth: 200,
+  borderRadius: 4,
+},
+
+forwardFileLink: {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  fontSize: 12,
+  opacity: 0.8,
+},
+
+// deleted
+deletedMessage: {
+  opacity: 0.5,
+  fontStyle: "italic",
+},
+
+editedLabel: {
+  fontSize: 11,
+  opacity: 0.5,
+},
+
+// actions
+actionsOverlay: {
+  position: "absolute",
+  top: 4,
+  right: 8,
+  zIndex: 10,
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+},
+
+actionBtn: {
+  background: "rgba(148,144,144,0.92)",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
+  padding: "2px 8px",
+  fontSize: 16,
+  lineHeight: "22px",
+},
+
+menuWrapper: {
+  position: "relative",
+},
+
+portalOverlay: {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9998,
+},
+
+dropdownMenu: {
+  position: "fixed",
+  background: "#fff",
+  borderRadius: 8,
+  boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+  minWidth: 160,
+  zIndex: 9999,
+  overflow: "hidden",
+},
+
+dropdownItem: {
+  padding: "8px 16px",
+  cursor: "pointer",
+  fontSize: 14,
+  color: "#222",
+},
+
+dropdownItemDanger: {
+  color: "#e53935",
+},
 };
+

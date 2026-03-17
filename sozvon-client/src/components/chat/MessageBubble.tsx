@@ -22,16 +22,6 @@ type Props = {
   getUser: (id: number) => User;
 };
 
-const btnStyle: React.CSSProperties = {
-  background: "rgba(148,144,144,0.92)",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  padding: "2px 8px",
-  fontSize: 16,
-  lineHeight: "22px",
-};
-
 function isImage(mimeType: string) {
   return mimeType.startsWith("image/");
 }
@@ -80,6 +70,7 @@ export default function MessageBubble({
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isOwn = m.senderId === myId;
+
   const imageAttachments =
     m.attachments?.filter((a) => isImage(a.mimeType)) ?? [];
   const videoAttachments =
@@ -88,7 +79,9 @@ export default function MessageBubble({
     m.attachments?.filter(
       (a) => !isImage(a.mimeType) && !isVideo(a.mimeType),
     ) ?? [];
+
   const multipleImages = imageAttachments.length > 1;
+
   const menuBtnRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
     null,
@@ -102,6 +95,7 @@ export default function MessageBubble({
   function cancelClose() {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
   }
+
   function closeMenu() {
     setMenuOpen(false);
     setHovered(false);
@@ -113,8 +107,9 @@ export default function MessageBubble({
       return;
     }
     if (!menuBtnRef.current) return;
+
     const rect = menuBtnRef.current.getBoundingClientRect();
-    const menuHeight = menuItems.length * 37; // ~37px на item
+    const menuHeight = menuItems.length * 37;
     const spaceBelow = window.innerHeight - rect.bottom;
 
     setMenuPos({
@@ -122,6 +117,7 @@ export default function MessageBubble({
         spaceBelow < menuHeight ? rect.top - menuHeight - 4 : rect.bottom + 4,
       right: window.innerWidth - rect.right,
     });
+
     setMenuOpen(true);
   }
 
@@ -167,15 +163,14 @@ export default function MessageBubble({
       data-bubble="true"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={(e) => {
-        // Не скрывать если мышь ушла на дочерний элемент (напр. меню)
         if (e.currentTarget.contains(e.relatedTarget as Node)) return;
         if (!menuOpen) setHovered(false);
       }}
       style={{
         ...styles.groupStartWrapper,
-        background: highlight ? "#c8f6f0" : hovered ? "#c9daed" : undefined,
-        transition: "background 0.2s",
-        position: "relative",
+        ...styles.bubbleWrapper,
+        ...(highlight && styles.bubbleHighlight),
+        ...(hovered && styles.bubbleHover),
       }}
     >
       {/* Левая колонка */}
@@ -196,24 +191,16 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Ответ */}
+        {/* Reply */}
         {m.replyToMessage && (
           <div
             onClick={() => onScrollToMessage(m.replyToMessage!.id)}
-            style={{
-              borderLeft: "3px solid #888",
-              background: "rgba(180,180,180,0.12)",
-              borderRadius: "0 6px 6px 0",
-              padding: "6px 8px",
-              marginBottom: 4,
-              fontSize: 13,
-              cursor: "pointer",
-            }}
+            style={styles.replyBlock}
           >
-            <div style={{ fontWeight: 600, marginBottom: 2, opacity: 0.8 }}>
+            <div style={styles.replyAuthor}>
               {getUser(m.replyToMessage.senderId).name}
             </div>
-            <div style={{ opacity: 0.7 }}>
+            <div style={styles.replyText}>
               {m.replyToMessage.text
                 ? m.replyToMessage.text.slice(0, 80) +
                   (m.replyToMessage.text.length > 80 ? "..." : "")
@@ -222,61 +209,40 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Пересланное */}
+        {/* Forwarded */}
         {m.forwardedFrom && (
-          <div
-            style={{
-              borderLeft: "3px solid #A4C7F0",
-              background: "rgba(164,199,240,0.15)",
-              borderRadius: "0 6px 6px 0",
-              padding: "6px 8px",
-              marginBottom: 4,
-              fontSize: 13,
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2, opacity: 0.8 }}>
+          <div style={styles.forwardBlock}>
+            <div style={styles.forwardAuthor}>
               ↪ {getUser(m.forwardedFrom.senderId).name}
             </div>
+
             {m.forwardedFrom.text && (
-              <div style={{ opacity: 0.7 }}>
+              <div style={styles.forwardText}>
                 {m.forwardedFrom.text.slice(0, 120)}
                 {m.forwardedFrom.text.length > 120 ? "..." : ""}
               </div>
             )}
+
             {(m.forwardedFrom.attachments?.length ?? 0) > 0 && (
-              <div
-                style={{
-                  marginTop: 4,
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 4,
-                }}
-              >
+              <div style={styles.forwardAttachments}>
                 {m.forwardedFrom.attachments!.map((att) => {
-                  if (att.mimeType.startsWith("image/")) {
+                  if (isImage(att.mimeType)) {
                     return (
                       <img
                         key={att.id}
                         src={att.url}
-                        alt={att.fileName}
-                        style={{
-                          maxWidth: 120,
-                          maxHeight: 80,
-                          borderRadius: 4,
-                          cursor: "pointer",
-                          objectFit: "cover",
-                        }}
+                        style={styles.forwardImage}
                         onClick={() => onImageClick(att.url)}
                       />
                     );
                   }
-                  if (att.mimeType.startsWith("video/")) {
+                  if (isVideo(att.mimeType)) {
                     return (
                       <video
                         key={att.id}
                         src={att.url}
                         controls
-                        style={{ maxWidth: 200, borderRadius: 4 }}
+                        style={styles.forwardVideo}
                       />
                     );
                   }
@@ -286,16 +252,9 @@ export default function MessageBubble({
                       href={att.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontSize: 12,
-                        opacity: 0.8,
-                      }}
+                      style={styles.forwardFileLink}
                     >
-                      <span>📎</span>
-                      <span>{att.fileName}</span>
+                      📎 {att.fileName}
                     </a>
                   );
                 })}
@@ -304,23 +263,21 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Текст / удалено */}
+        {/* Text */}
         {m.deletedAt ? (
-          <div
-            style={{ ...styles.messageText, opacity: 0.5, fontStyle: "italic" }}
-          >
+          <div style={{ ...styles.messageText, ...styles.deletedMessage }}>
             Сообщение удалено
           </div>
         ) : (
           <>
             {m.text && <div style={styles.messageText}>{m.text}</div>}
             {m.editedAt && (
-              <span style={{ fontSize: 11, opacity: 0.5 }}>(изменено)</span>
+              <span style={styles.editedLabel}>(изменено)</span>
             )}
           </>
         )}
 
-        {/* Изображения */}
+        {/* Images */}
         {imageAttachments.length > 0 && (
           <div
             style={{
@@ -334,8 +291,6 @@ export default function MessageBubble({
               <img
                 key={att.id}
                 src={att.url}
-                alt={att.fileName}
-                title={att.fileName}
                 style={multipleImages ? styles.gridImage : styles.singleImage}
                 onClick={() => onImageClick(att.url)}
               />
@@ -343,73 +298,53 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Видео */}
+        {/* Videos */}
         {videoAttachments.map((att) => (
           <video
             key={att.id}
             src={att.url}
             controls
             style={styles.inlineVideo}
-            title={att.fileName}
           />
         ))}
 
-        {/* Файлы */}
+        {/* Files */}
         {fileAttachments.length > 0 && (
           <div style={styles.attachments}>
             {fileAttachments.map((att) => (
-              <div key={att.id}>
-                <a
-                  href={att.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={styles.fileLink}
-                >
-                  <span style={styles.fileIcon}>📎</span>
-                  <span style={styles.fileName}>{att.fileName}</span>
-                  <span style={styles.fileSize}>{formatBytes(att.size)}</span>
-                </a>
-              </div>
+              <a
+                key={att.id}
+                href={att.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.fileLink}
+              >
+                <span style={styles.fileIcon}>📎</span>
+                <span style={styles.fileName}>{att.fileName}</span>
+                <span style={styles.fileSize}>{formatBytes(att.size)}</span>
+              </a>
             ))}
           </div>
         )}
 
-        {/* Кнопки действий */}
+        {/* Actions */}
         {hovered && (
-          <div
-            style={{
-              position: "absolute",
-              top: 4,
-              right: 8,
-              zIndex: 10,
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <button
-              onClick={() => onReply(m)}
-              title="Ответить"
-              style={btnStyle}
-            >
+          <div style={styles.actionsOverlay}>
+            <button onClick={() => onReply(m)} style={styles.actionBtn}>
               ↩
             </button>
-            <button
-              onClick={() => onForward(m)}
-              title="Переслать"
-              style={btnStyle}
-            >
+
+            <button onClick={() => onForward(m)} style={styles.actionBtn}>
               ↪
             </button>
 
-            {/* Меню ••• */}
             <div
               ref={menuBtnRef}
-              onMouseLeave={scheduleClose}
               onMouseEnter={cancelClose}
-              style={{ position: "relative" }}
+              onMouseLeave={scheduleClose}
+              style={styles.menuWrapper}
             >
-              <button onClick={handleMenuToggle} style={btnStyle}>
+              <button onClick={handleMenuToggle} style={styles.actionBtn}>
                 •••
               </button>
             </div>
@@ -419,40 +354,26 @@ export default function MessageBubble({
               createPortal(
                 <>
                   <div
-                    style={{ position: "fixed", inset: 0, zIndex: 9998 }}
+                    style={styles.portalOverlay}
                     onClick={closeMenu}
                   />
                   <div
-                    onMouseEnter={cancelClose}
-                    onMouseLeave={scheduleClose}
                     style={{
-                      position: "fixed",
+                      ...styles.dropdownMenu,
                       top: menuPos.top,
                       right: menuPos.right,
-                      background: "#fff",
-                      borderRadius: 8,
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                      minWidth: 160,
-                      zIndex: 9999,
-                      overflow: "hidden",
                     }}
+                    onMouseEnter={cancelClose}
+                    onMouseLeave={scheduleClose}
                   >
                     {menuItems.map((item) => (
                       <div
                         key={item.label}
                         onClick={item.action}
                         style={{
-                          padding: "8px 16px",
-                          cursor: "pointer",
-                          fontSize: 14,
-                          color: (item as any).danger ? "#e53935" : "#222",
+                          ...styles.dropdownItem,
+                          ...(item.danger && styles.dropdownItemDanger),
                         }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = "#f5f5f5")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "transparent")
-                        }
                       >
                         {item.label}
                       </div>

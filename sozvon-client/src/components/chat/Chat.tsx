@@ -215,72 +215,32 @@ export default function Chat({ chatId }: Props) {
       )}
 
       {editingMessage && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
+  <div style={styles.modalOverlay}>
+    <div style={styles.modalContent}>
+      <div style={styles.modalTitle}>Редактировать сообщение</div>
+
+      <textarea
+        value={editText}
+        onChange={(e) => setEditText(e.target.value)}
+        rows={4}
+        style={styles.modalTextarea}
+      />
+
+      <div style={styles.modalActions}>
+        <button
+          onClick={() => setEditingMessage(null)}
+          style={styles.modalCancelBtn}
         >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: 24,
-              width: 400,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div style={{ fontWeight: 600 }}>Редактировать сообщение</div>
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              rows={4}
-              style={{
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                fontSize: 14,
-                resize: "vertical",
-              }}
-            />
-            <div
-              style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
-            >
-              <button
-                onClick={() => setEditingMessage(null)}
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                  cursor: "pointer",
-                }}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={submitEdit}
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: 8,
-                  border: "none",
-                  cursor: "pointer",
-                  background: "#4a90e2",
-                  color: "#fff",
-                }}
-              >
-                Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          Отмена
+        </button>
+
+        <button onClick={submitEdit} style={styles.modalSaveBtn}>
+          Сохранить
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Верхний бар */}
       <ChatTopBar
