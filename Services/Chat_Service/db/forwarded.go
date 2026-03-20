@@ -22,7 +22,7 @@ func (d *Database) SaveForwardedMessages(ctx context.Context, toChatID string, s
 	}
 	defer tx.Rollback()
 
-	now := time.Now()
+	now := time.Now().UTC()
 	var result []*models.Message
 
 	for _, origID := range originalIDs {
@@ -97,7 +97,7 @@ func (d *Database) forwardOne(ctx context.Context, tx *sql.Tx, toChatID string, 
 		ID:        newID,
 		ChatID:    toChatID,
 		SenderID:  senderID,
-		CreatedAt: now,
+		CreatedAt: models.UTCTime{Time: now},
 		ForwardedFrom: &models.ForwardedMeta{
 			OriginalMessageID: snapshotOrigID,
 			SenderID:          snapshotSenderID,

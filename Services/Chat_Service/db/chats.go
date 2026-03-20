@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
+	"time"
 
 	"Chat_Service/models"
 
@@ -142,6 +144,7 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 	}
 	defer rows.Close()
 
+	var updatedAt time.Time
 	var chats []models.ChatListItem
 	for rows.Next() {
 		var item models.ChatListItem
@@ -150,11 +153,13 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 		if err := rows.Scan(
 			&item.ChatID, &item.Type, &item.Name,
 			&members,
-			&item.LastMessage, &item.UpdatedAt, &item.UnreadCount,
+			&item.LastMessage, &updatedAt, &item.UnreadCount,
 		); err != nil {
+			log.Printf("scan chat error: %v", err)
 			return nil, fmt.Errorf("failed to scan chat: %w", err)
 		}
 
+		item.UpdatedAt = models.UTCTime{Time: updatedAt.UTC()}
 		item.Members = []int(members)
 		chats = append(chats, item)
 	}

@@ -271,9 +271,7 @@ export default function MessageBubble({
         ) : (
           <>
             {m.text && <div style={styles.messageText}>{m.text}</div>}
-            {m.editedAt && (
-              <span style={styles.editedLabel}>(изменено)</span>
-            )}
+            {m.editedAt && <span style={styles.editedLabel}>(изменено)</span>}
           </>
         )}
 
@@ -353,10 +351,7 @@ export default function MessageBubble({
               menuPos &&
               createPortal(
                 <>
-                  <div
-                    style={styles.portalOverlay}
-                    onClick={closeMenu}
-                  />
+                  <div style={styles.portalOverlay} onClick={closeMenu} />
                   <div
                     style={{
                       ...styles.dropdownMenu,

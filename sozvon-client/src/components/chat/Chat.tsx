@@ -1,204 +1,74 @@
-//sozvon-client\src\components\chat\Chat.tsx
-import { useEffect, useState, useCallback } from "react";
-import { onWSMessage } from "../../services/ws";
-import {
-  getMessages,
-  getMessagesContext,
-  sendMessage,
-  uploadFiles,
-} from "../../api/chats";
-import { editMessage, deleteMessage } from "../../api/chats";
+// sozvon-client/src/components/chat/Chat.tsx
+
+import { useState, useEffect } from "react";
+import { useChatMessages } from "./hooks/useChatMessages";
+import { useChatActions } from "./hooks/useChatActions";
+import { useFileUpload } from "./hooks/useFileUpload";
 import { useChatContext } from "../../context/ChatContext";
+import { useVisibleMessages } from "./hooks/useVisibleMessages";
 import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import ChatTopBar from "./ChatTopBar";
 import Lightbox from "./Lightbox";
 import ForwardModal from "./ForwardModal";
+import EditModal from "./EditModal";
 import { styles } from "./chat.styles";
-import type { Message, PendingFile } from "./chat.types";
+import { Message } from "./chat.types";
 
 type Props = { chatId: string };
 
 export default function Chat({ chatId }: Props) {
-  const { getSafeUser, markRead, notifyOwnMessage, chats, myId } =
-    useChatContext();
+  const { getSafeUser, chats, myId, markRead } = useChatContext();
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState("");
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
     null,
   );
-  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
-  const [editText, setEditText] = useState("");
-  // Находим собеседника по chatId
+
+  const { messages, setMessages, firstUnreadId, highlightId,
+        hasMore, loadingMore, loadMore, scrollToMessage } = useChatMessages(chatId);
+
+  const {
+    replyTo,
+    setReplyTo,
+    editingMessage,
+    editText,
+    setEditText,
+    handleEdit,
+    submitEdit,
+    cancelEdit,
+    handleDelete,
+    send,
+  } = useChatActions(chatId, setMessages);
+
+  const {
+    pendingFiles,
+    uploading,
+    uploadProgress,
+    handleFilesAdded,
+    handleFileRemove,
+  } = useFileUpload();
+
+  function handleSend() {
+    send({ text, pendingFiles, replyTo, onClear: () => setText("") });
+  }
+
+  const [text, setText] = useState("");
+
   const chat = chats.find((c) => c.chatId === chatId);
   const withId = chat?.members.find((m) => m !== myId);
   const companion = withId ? getSafeUser(withId) : null;
 
-  useEffect(() => {
-    markRead(chatId);
-    setMessages([]);
-    setPendingFiles([]);
-    setText("");
-    getMessages(chatId).then((data) => {
-      setMessages(Array.isArray(data) ? data : []);
-    });
-  }, [chatId]);
+  const { observe, flush, reset } = useVisibleMessages((id) =>
+    markRead(chatId, id),
+  );
 
   useEffect(() => {
-    const off = onWSMessage((msg) => {
-      if (msg.event === "message:new" && msg.data.chatId === chatId) {
-        setMessages((prev) => [...prev, msg.data]);
-        markRead(chatId);
-      }
-    });
-    return off;
+    return () => {
+      flush();
+      reset();
+    };
   }, [chatId]);
-
-  const handleFilesAdded = useCallback((newFiles: PendingFile[]) => {
-    setPendingFiles((prev) => [...prev, ...newFiles]);
-  }, []);
-
-  const handleFileRemove = useCallback((index: number) => {
-    setPendingFiles((prev) => {
-      const updated = [...prev];
-      if (updated[index].previewUrl)
-        URL.revokeObjectURL(updated[index].previewUrl!);
-      updated.splice(index, 1);
-      return updated;
-    });
-  }, []);
-
-  // Заменить сигнатуру функции:
-  async function scrollToMessage(
-    id: string,
-    messageRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>,
-  ) {
-    // Сообщение уже загружено
-    if (messageRefs.current[id]) {
-      messageRefs.current[id]!.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-      setHighlightId(id);
-      setTimeout(() => setHighlightId(null), 1500);
-      return;
-    }
-
-    // Подгружаем контекст
-    try {
-      const data = await getMessagesContext(chatId, id);
-      if (!Array.isArray(data)) return;
-
-      // Мержим — добавляем только те, которых ещё нет
-      setMessages((prev) => {
-        const existingIds = new Set(prev.map((m) => m.id));
-        const newOnes = data.filter((m: Message) => !existingIds.has(m.id));
-        const merged = [...prev, ...newOnes].sort(
-          (a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-        );
-        return merged;
-      });
-
-      // Скролл после рендера
-      setHighlightId(id);
-      setTimeout(() => {
-        messageRefs.current[id]?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        setTimeout(() => setHighlightId(null), 1500);
-      }, 100);
-    } catch (e) {
-      console.error("Failed to load message context:", e);
-    }
-  }
-
-  async function handleEdit(msg: Message) {
-    setEditingMessage(msg);
-    setEditText(msg.text);
-  }
-
-  async function submitEdit() {
-    if (!editingMessage) return;
-    try {
-      await editMessage(chatId, editingMessage.id, editText);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === editingMessage.id
-            ? { ...m, text: editText, editedAt: new Date().toISOString() }
-            : m,
-        ),
-      );
-      setEditingMessage(null);
-    } catch (e) {
-      console.error("Edit failed:", e);
-    }
-  }
-
-  async function handleDelete(msg: Message) {
-    if (!confirm("Удалить сообщение?")) return;
-    try {
-      await deleteMessage(chatId, msg.id);
-      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    } catch (e) {
-      console.error("Delete failed:", e);
-    }
-  }
-
-  async function send() {
-    const trimmed = text.trim();
-    const hasFiles = pendingFiles.length > 0;
-    if (!trimmed && !hasFiles) return;
-
-    setText("");
-
-    if (hasFiles) {
-      setUploading(true);
-      setUploadProgress(0);
-      const files = pendingFiles.map((pf) => pf.file);
-      pendingFiles.forEach((pf) => {
-        if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl);
-      });
-      setPendingFiles([]);
-      try {
-        const msg = await uploadFiles(
-          chatId,
-          trimmed,
-          files,
-          replyTo?.id,
-          setUploadProgress,
-        );
-
-        setMessages((prev) => [...prev, msg]);
-        notifyOwnMessage(chatId);
-        setReplyTo(null);
-      } catch (e) {
-        console.error("Upload failed:", e);
-        setText(trimmed);
-      } finally {
-        setUploading(false);
-        setUploadProgress(0);
-      }
-    } else {
-      try {
-        const msg = await sendMessage(chatId, trimmed, replyTo?.id);
-        setMessages((prev) => [...prev, msg]);
-        notifyOwnMessage(chatId);
-        setReplyTo(null);
-      } catch (e) {
-        console.error("Send failed:", e);
-        setText(trimmed);
-      }
-    }
-  }
 
   return (
     <div style={styles.chatWrapper}>
@@ -210,39 +80,18 @@ export default function Chat({ chatId }: Props) {
         <ForwardModal
           message={forwardingMessage}
           onClose={() => setForwardingMessage(null)}
-          onDone={() => {}}
         />
       )}
 
       {editingMessage && (
-  <div style={styles.modalOverlay}>
-    <div style={styles.modalContent}>
-      <div style={styles.modalTitle}>Редактировать сообщение</div>
+        <EditModal
+          value={editText}
+          onChange={setEditText}
+          onSave={submitEdit}
+          onCancel={cancelEdit}
+        />
+      )}
 
-      <textarea
-        value={editText}
-        onChange={(e) => setEditText(e.target.value)}
-        rows={4}
-        style={styles.modalTextarea}
-      />
-
-      <div style={styles.modalActions}>
-        <button
-          onClick={() => setEditingMessage(null)}
-          style={styles.modalCancelBtn}
-        >
-          Отмена
-        </button>
-
-        <button onClick={submitEdit} style={styles.modalSaveBtn}>
-          Сохранить
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-      {/* Верхний бар */}
       <ChatTopBar
         user={companion}
         onCall={() => console.log("call", chatId)}
@@ -250,6 +99,7 @@ export default function Chat({ chatId }: Props) {
       />
 
       <ChatMessages
+        chatId={chatId}
         messages={messages}
         getUser={getSafeUser}
         onImageClick={setLightboxUrl}
@@ -260,6 +110,11 @@ export default function Chat({ chatId }: Props) {
         myId={myId}
         highlightId={highlightId}
         onScrollToMessage={scrollToMessage}
+        firstUnreadId={firstUnreadId}
+        observeMessage={observe}
+		hasMore={hasMore}
+		loadingMore={loadingMore}
+		onLoadMore={loadMore}
       />
 
       <ChatInput
@@ -270,7 +125,7 @@ export default function Chat({ chatId }: Props) {
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
         onTextChange={setText}
-        onSend={send}
+        onSend={handleSend}
         onFilesAdded={handleFilesAdded}
         onFileRemove={handleFileRemove}
       />

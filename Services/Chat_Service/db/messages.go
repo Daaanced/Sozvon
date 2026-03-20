@@ -16,7 +16,7 @@ import (
 // SaveMessage сохраняет новое сообщение и возвращает его модель.
 func (d *Database) SaveMessage(ctx context.Context, chatID string, senderID int, text string, replyToID *string) (*models.Message, error) {
 	messageID := uuid.NewString()
-	now := time.Now()
+	now := time.Now().UTC()
 
 	_, err := d.db.ExecContext(ctx,
 		`INSERT INTO messages (id, chat_id, sender_id, text, reply_to_id, created_at)
@@ -33,7 +33,7 @@ func (d *Database) SaveMessage(ctx context.Context, chatID string, senderID int,
 		SenderID:  senderID,
 		Text:      text,
 		ReplyToID: replyToID,
-		CreatedAt: now,
+		CreatedAt: models.UTCTime{Time: now},
 	}, nil
 }
 
@@ -145,25 +145,31 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 	var replyID, rID, fwdOrigID sql.NullString
 	var rSenderID, fwdSenderID sql.NullInt64
 	var rText, fwdText sql.NullString
+
+	var createdAt time.Time
 	var editedAt, deletedAt sql.NullTime
 
 	if err := rows.Scan(
 		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Text,
-		&replyID, &editedAt, &deletedAt, &msg.CreatedAt,
+		&replyID, &editedAt, &deletedAt, &createdAt,
 		&rID, &rSenderID, &rText,
 		&fwdSenderID, &fwdText, &fwdOrigID,
 	); err != nil {
 		return msg, fmt.Errorf("failed to scan message: %w", err)
 	}
 
+	msg.CreatedAt = models.UTCTime{Time: createdAt.UTC()}
+
 	if replyID.Valid {
 		msg.ReplyToID = &replyID.String
 	}
 	if editedAt.Valid {
-		msg.EditedAt = &editedAt.Time
+		t := models.UTCTime{Time: editedAt.Time.UTC()}
+		msg.EditedAt = &t
 	}
 	if deletedAt.Valid {
-		msg.DeletedAt = &deletedAt.Time
+		t := models.UTCTime{Time: deletedAt.Time.UTC()}
+		msg.DeletedAt = &t
 		msg.Text = ""
 		msg.Attachments = nil
 	}

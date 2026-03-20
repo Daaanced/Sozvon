@@ -266,6 +266,42 @@ func (h *ChatHandler) GetMessagesContext(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusOK, messages)
 }
 
+func (h *ChatHandler) GetUnreadMessages(w http.ResponseWriter, r *http.Request) {
+	chatID := mux.Vars(r)["chatId"]
+
+	userID, err := h.extractUserIDFromAuth(r)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	result, err := h.db.GetMessagesFromUnread(ctx, chatID, userID, 25)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", err.Error())
+		return
+	}
+
+	// nil = нет непрочитанных, клиент сам загрузит обычным способом
+	if result == nil {
+		respondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"messages":      nil,
+			"firstUnreadId": nil,
+			"totalUnread":   0,
+		})
+		return
+	}
+
+	h.enrichMessages(ctx, result.Messages)
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"messages":      result.Messages,
+		"firstUnreadId": result.FirstUnreadID,
+		"totalUnread":   result.TotalUnread,
+	})
+}
+
 // enrichMessages подгружает вложения для списка сообщений
 func (h *ChatHandler) enrichMessages(ctx context.Context, messages []models.Message) {
 	if len(messages) == 0 {

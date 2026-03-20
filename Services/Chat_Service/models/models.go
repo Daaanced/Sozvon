@@ -3,6 +3,7 @@ package models
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -25,13 +26,31 @@ type Chat struct {
 }
 
 type ChatListItem struct {
-	ChatID      string    `json:"chatId"`
-	Type        string    `json:"type"`
-	Name        string    `json:"name,omitempty"`
-	Members     []int     `json:"members"`
-	LastMessage string    `json:"lastMessage"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	UnreadCount int       `json:"unreadCount"`
+	ChatID      string  `json:"chatId"`
+	Type        string  `json:"type"`
+	Name        string  `json:"name,omitempty"`
+	Members     []int   `json:"members"`
+	LastMessage string  `json:"lastMessage"`
+	UpdatedAt   UTCTime `json:"updatedAt"`
+	UnreadCount int     `json:"unreadCount"`
+}
+
+type UTCTime struct {
+	time.Time
+}
+
+func (t UTCTime) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + t.UTC().Format(time.RFC3339Nano) + `"`), nil
+}
+
+func (t *UTCTime) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	parsed, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return err
+	}
+	t.Time = parsed.UTC()
+	return nil
 }
 
 // Attachment — вложение к сообщению
@@ -53,18 +72,17 @@ type ForwardedMeta struct {
 }
 
 type Message struct {
-	ID                   string         `json:"id"`
-	ChatID               string         `json:"chatId"`
-	SenderID             int            `json:"senderId"`
-	Text                 string         `json:"text"`
-	ReplyToID            *string        `json:"replyToId,omitempty"`
-	ReplyToMessage       *ReplyPreview  `json:"replyToMessage,omitempty"`
-	ForwardedFrom        *ForwardedMeta `json:"forwardedFrom,omitempty"`
-	EditedAt             *time.Time     `json:"editedAt,omitempty"`
-	DeletedAt            *time.Time     `json:"deletedAt,omitempty"`
-	Attachments          []Attachment   `json:"attachments,omitempty"`
-	ForwardedAttachments []Attachment   `json:"forwardedAttachments,omitempty"`
-	CreatedAt            time.Time      `json:"createdAt"`
+	ID             string         `json:"id"`
+	ChatID         string         `json:"chatId"`
+	SenderID       int            `json:"senderId"`
+	Text           string         `json:"text"`
+	ReplyToID      *string        `json:"replyToId,omitempty"`
+	ReplyToMessage *ReplyPreview  `json:"replyToMessage,omitempty"`
+	ForwardedFrom  *ForwardedMeta `json:"forwardedFrom,omitempty"`
+	EditedAt       *UTCTime       `json:"editedAt,omitempty"`
+	DeletedAt      *UTCTime       `json:"deletedAt,omitempty"`
+	Attachments    []Attachment   `json:"attachments,omitempty"`
+	CreatedAt      UTCTime        `json:"createdAt"`
 }
 
 type ReplyPreview struct {
@@ -137,4 +155,10 @@ type SuccessResponse struct {
 	Status  string      `json:"status"`
 	Message string      `json:"message,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
+}
+
+type UnreadResult struct {
+	Messages      []Message
+	FirstUnreadID string
+	TotalUnread   int
 }

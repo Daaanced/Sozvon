@@ -7,6 +7,10 @@ import SettingsModal from "./SettingsModal";
 
 export default function Sidebar() {
   const { chats, myId, myLogin, me, getSafeUser, unread } = useChatContext();
+  console.log(
+    "[Sidebar] render, chats order:",
+    chats.map((c) => `${c.chatId.slice(0, 8)}=${c.updatedAt?.slice(11, 19)}`),
+  );
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);

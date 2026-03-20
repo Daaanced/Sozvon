@@ -81,6 +81,7 @@ func (h *ChatHandler) GetChats(w http.ResponseWriter, r *http.Request) {
 
 	chats, err := h.db.GetUserChats(ctx, userID)
 	if err != nil {
+		log.Printf("GetUserChats error: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to get chats")
 		return
 	}

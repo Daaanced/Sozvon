@@ -7,11 +7,10 @@ import type { Message } from "./chat.types";
 type Props = {
   message: Message;
   onClose: () => void;
-  onDone: () => void;
 };
 
-export default function ForwardModal({ message, onClose, onDone }: Props) {
-  const { chats, myId, getSafeUser } = useChatContext();
+export default function ForwardModal({ message, onClose }: Props) {
+  const { chats, myId, getSafeUser, notifyOwnMessage } = useChatContext();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
@@ -20,12 +19,17 @@ export default function ForwardModal({ message, onClose, onDone }: Props) {
     if (!selectedChatId) return;
     setSending(true);
     try {
-      await forwardMessages(
+      const result = await forwardMessages(
         [message.id],
         selectedChatId,
         comment.trim() || undefined,
       );
-      onDone();
+      // result — массив отправленных сообщений
+      const msgs = Array.isArray(result) ? result : [];
+      if (msgs.length > 0) {
+        const lastMsg = msgs[msgs.length - 1];
+        notifyOwnMessage(selectedChatId, lastMsg.createdAt);
+      }
       onClose();
     } catch (e) {
       console.error("Forward failed:", e);

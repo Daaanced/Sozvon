@@ -64,6 +64,7 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/chats/{chatId}/messages/{messageId}", h.EditMessage).Methods("PUT", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages/{messageId}", h.DeleteMessage).Methods("DELETE", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/upload", h.UploadFiles).Methods("POST", "OPTIONS")
+	r.HandleFunc("/chats/{chatId}/messages/unread", h.GetUnreadMessages).Methods("GET", "OPTIONS")
 
 	// Медиа
 	r.HandleFunc("/media/{filename}", h.ServeMedia).Methods("GET")

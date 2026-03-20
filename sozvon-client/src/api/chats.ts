@@ -113,3 +113,7 @@ export function markRead(chatId: string, lastMessageId: string) {
 export function getChatInfo(chatId: string) {
   return requestAuth(`/chats/${chatId}`);
 }
+
+export function getUnreadMessages(chatId: string) {
+  return requestAuth(`/chats/${chatId}/messages/unread`);
+}
