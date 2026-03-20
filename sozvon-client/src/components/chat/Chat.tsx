@@ -1,6 +1,6 @@
 // sozvon-client/src/components/chat/Chat.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useChatMessages } from "./hooks/useChatMessages";
 import { useChatActions } from "./hooks/useChatActions";
 import { useFileUpload } from "./hooks/useFileUpload";
@@ -18,7 +18,7 @@ import { Message } from "./chat.types";
 type Props = { chatId: string };
 
 export default function Chat({ chatId }: Props) {
-  const { getSafeUser, chats, myId, markRead } = useChatContext();
+  const { getSafeUser, chats, myId, markRead, setActiveChat } = useChatContext();
 
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
@@ -26,7 +26,7 @@ export default function Chat({ chatId }: Props) {
   );
 
   const { messages, setMessages, firstUnreadId, highlightId,
-        hasMore, loadingMore, loadMore, scrollToMessage } = useChatMessages(chatId);
+  hasMore, loadingMore, loadMore, scrollToMessage, initialLoading } = useChatMessages(chatId);
 
   const {
     replyTo,
@@ -58,17 +58,36 @@ export default function Chat({ chatId }: Props) {
   const chat = chats.find((c) => c.chatId === chatId);
   const withId = chat?.members.find((m) => m !== myId);
   const companion = withId ? getSafeUser(withId) : null;
-
-  const { observe, flush, reset } = useVisibleMessages((id) =>
-    markRead(chatId, id),
-  );
+  const chatIdRef = useRef(chatId);
 
   useEffect(() => {
-    return () => {
-      flush();
-      reset();
-    };
-  }, [chatId]);
+  chatIdRef.current = chatId;
+  setActiveChat(chatId);
+  return () => setActiveChat(null);
+}, [chatId]);
+
+  const { observe, unobserve, flush, reset, initChat } = useVisibleMessages(
+  (id) => markRead(chatId, id),
+);
+
+	useEffect(() => {
+	if (messages.length === 0) return;
+	if (firstUnreadId) return; // если есть unread — позиция уже правильная на сервере
+
+	const lastMsg = messages[messages.length - 1];
+	initChat(chatId, new Date(lastMsg.createdAt).getTime());
+	}, [chatId, messages, firstUnreadId]);
+
+	useEffect(() => {
+	const currentChatId = chatId;
+	return () => {
+		flush(currentChatId);
+	};
+	}, [chatId, flush]);
+
+	useEffect(() => {
+	reset();
+	}, [chatId, reset]);
 
   return (
     <div style={styles.chatWrapper}>
@@ -112,9 +131,11 @@ export default function Chat({ chatId }: Props) {
         onScrollToMessage={scrollToMessage}
         firstUnreadId={firstUnreadId}
         observeMessage={observe}
+		unobserveMessage={unobserve}
 		hasMore={hasMore}
 		loadingMore={loadingMore}
 		onLoadMore={loadMore}
+		initialLoading={initialLoading}
       />
 
       <ChatInput

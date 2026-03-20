@@ -23,6 +23,7 @@ type ChatContextType = {
   markRead: (chatId: string, lastMessageId?: string) => void;
   notifyOwnMessage: (chatId: string, createdAt: string) => void;
   getSafeUser: (id: number) => User;
+  setActiveChat: (chatId: string | null) => void;
 };
 
 export const DELETED_USER: User = {
@@ -44,9 +45,7 @@ export function useChatContext() {
   return ctx;
 }
 
-function parseTokenPayload(
-  token: string,
-): { id: number; login: string } | null {
+function parseTokenPayload(token: string): { id: number; login: string } | null {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const id = parseInt(payload.user_id, 10);
@@ -68,16 +67,10 @@ function sortChats(chats: Chat[]): Chat[] {
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("token");
-  if (!token) {
-    console.error("ChatProvider: no token");
-    return null;
-  }
+  if (!token) return null;
 
   const parsed = parseTokenPayload(token);
-  if (!parsed) {
-    console.error("ChatProvider: invalid token");
-    return null;
-  }
+  if (!parsed) return null;
 
   const { id: myId, login: myLogin } = parsed;
 
@@ -85,7 +78,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [users, setUsers] = useState<Record<number, User>>({});
   const [unread, setUnread] = useState<Record<string, boolean>>({});
+
   const loadingUsersRef = useRef<Set<number>>(new Set());
+  const locallyReadRef = useRef<Set<string>>(new Set());
+  const activeChatRef = useRef<string | null>(null);
+
+  function setActiveChat(chatId: string | null) {
+    activeChatRef.current = chatId;
+  }
 
   function getSafeUser(id: number): User {
     if (id === myId) return me ?? DELETED_USER;
@@ -93,9 +93,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function markRead(chatId: string, lastMessageId?: string) {
-    console.log("[markRead]", chatId, lastMessageId);
+    locallyReadRef.current.add(chatId);
+
     setUnread((prev) => ({ ...prev, [chatId]: false }));
+
     if (!lastMessageId) return;
+
     try {
       await requestAuth(`/chats/${chatId}/read`, {
         method: "POST",
@@ -107,9 +110,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }
 
   function notifyOwnMessage(chatId: string, createdAt: string) {
-    console.log(
-      `[notifyOwnMessage] chatId=${chatId.slice(0, 8)} createdAt=${createdAt}`,
-    );
+    locallyReadRef.current.add(chatId);
+    setUnread((prev) => ({ ...prev, [chatId]: false }));
+
     setChats((prev) => {
       const index = prev.findIndex((c) => c.chatId === chatId);
       if (index === -1) return prev;
@@ -144,14 +147,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const safeChats: Chat[] = Array.isArray(data) ? data : [];
       const sorted = sortChats(safeChats);
 
-      console.log(
-        "[loadChats] from server:",
-        sorted.map((c) => ({
-          id: c.chatId.slice(0, 8),
-          updatedAt: c.updatedAt,
-        })),
-      );
-
       setChats((prev) => {
         if (prev.length === 0) return sorted;
 
@@ -159,38 +154,32 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const merged = sorted.map((chat) => {
           const existing = map.get(chat.chatId);
           if (!existing) return chat;
+
           const prevTime = existing.updatedAt
             ? new Date(existing.updatedAt).getTime()
             : 0;
           const newTime = chat.updatedAt
             ? new Date(chat.updatedAt).getTime()
             : 0;
-          const winner = prevTime > newTime ? existing : chat;
-          console.log(
-            `[loadChats] merge ${chat.chatId.slice(0, 8)}: server=${chat.updatedAt} client=${existing.updatedAt} → kept=${winner.updatedAt}`,
-          );
-          return winner;
+
+          return prevTime > newTime ? existing : chat;
         });
 
-        const result = sortChats(merged);
-        console.log(
-          "[loadChats] final order:",
-          result.map((c) => ({
-            id: c.chatId.slice(0, 8),
-            updatedAt: c.updatedAt,
-          })),
-        );
-        return result;
+        return sortChats(merged);
       });
 
-      // Обновляем unread только для чатов где ещё не сбросили локально
       setUnread((prev) => {
         const next = { ...prev };
+
         sorted.forEach((chat: any) => {
-          if (chat.unreadCount > 0 && prev[chat.chatId] !== false) {
+          if (
+            chat.unreadCount > 0 &&
+            !locallyReadRef.current.has(chat.chatId)
+          ) {
             next[chat.chatId] = true;
           }
         });
+
         return next;
       });
 
@@ -217,14 +206,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
 
       if (msg.event === "chat:created" || msg.event === "chat:activated") {
-        console.log("[WS] chat event:", msg.event, msg.data);
         loadChats();
         return;
       }
 
       if (msg.event === "message:new") {
         const chatId: string | undefined = msg.data?.chatId;
+        const senderId: number | undefined = msg.data?.senderId;
+
         if (!chatId) return;
+
+        // ❗ игнорируем свои сообщения
+        if (senderId === myId) return;
 
         setChats((prev) => {
           const index = prev.findIndex((c) => c.chatId === chatId);
@@ -232,9 +225,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
           const chat = prev[index];
           const now = msg.data.createdAt ?? new Date().toISOString();
-          console.log(
-            `[WS message:new] chatId=${chatId.slice(0, 8)} prevUpdatedAt=${chat.updatedAt} newTime=${now}`,
-          );
+
           const prevTime = chat.updatedAt
             ? new Date(chat.updatedAt).getTime()
             : 0;
@@ -246,14 +237,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           const next = [...prev];
           next.splice(index, 1);
           next.unshift(updatedChat);
-          console.log(
-            "[WS setChats] new order:",
-            next.map(
-              (c) => `${c.chatId.slice(0, 8)}=${c.updatedAt?.slice(11, 19)}`,
-            ),
-          );
           return next;
         });
+
+        // ❗ если чат открыт — не ставим unread
+        if (chatId === activeChatRef.current) return;
 
         setUnread((prev) => {
           if (prev[chatId]) return prev;
@@ -280,6 +268,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         markRead,
         notifyOwnMessage,
         getSafeUser,
+        setActiveChat,
       }}
     >
       {children}
