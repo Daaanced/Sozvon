@@ -7,7 +7,7 @@ import {
   deleteMessage,
 } from "../../../api/chats";
 import { useChatContext } from "../../../context/ChatContext";
-import type { Message, PendingFile } from "../chat.types";
+import type { Message, PendingFile, Attachment } from "../chat.types";
 
 interface SendParams {
   text: string;
@@ -78,12 +78,24 @@ export function useChatActions(
         let msg: Message;
 
         if (hasFiles) {
-          msg = await uploadFiles(
-            chatId,
-            trimmed,
-            pendingFiles.map((pf) => pf.file),
-            replyTo?.id,
-          );
+          msg = await uploadFiles(chatId, trimmed, pendingFiles, replyTo?.id);
+
+          if (msg.attachments) {
+            const map = new Map(
+              pendingFiles.map((pf) => [pf.file.name + pf.file.size, pf]),
+            );
+
+            msg.attachments = msg.attachments.map((att: Attachment) => {
+              const key = att.fileName + att.size;
+              const pf = map.get(key);
+
+              return {
+                ...att,
+                width: pf?.width,
+                height: pf?.height,
+              };
+            });
+          }
         } else {
           msg = await sendMessage(chatId, trimmed, replyTo?.id);
         }
@@ -93,7 +105,6 @@ export function useChatActions(
         setReplyTo(null);
       } catch (e) {
         console.error("Send failed:", e);
-        // восстанавливаем текст — вызывающий должен обработать сам
         throw e;
       }
     },

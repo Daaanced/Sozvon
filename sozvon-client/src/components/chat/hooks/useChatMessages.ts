@@ -6,88 +6,114 @@ import {
   getMessages,
   getMessagesContext,
   getUnreadMessages,
+  getMessagesAfter,
+  getMessagesBefore,
 } from "../../../api/chats";
 import { useChatContext } from "../../../context/ChatContext";
 import type { Message } from "../chat.types";
 
 const PAGE_SIZE = 50;
 
-export function useChatMessages(chatId: string) {
-  const { markRead } = useChatContext();
+export type ScrollIntent =
+  | { type: "bottom" }
+  | { type: "unread"; id: string }
+  | { type: "message"; id: string }
+  | null;
+
+export function useChatMessages(
+  chatId: string,
+  onInitChat: (chatId: string, time: number) => void,
+) {
+  const { markRead, loadUser } = useChatContext();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
+  const [scrollIntent, setScrollIntent] = useState<ScrollIntent>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const messagesRef = useRef<Message[]>([]);
-  const initialLoadingRef = useRef(true);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const [hasMoreBottom, setHasMoreBottom] = useState(false);
+  const [loadingMoreBottom, setLoadingMoreBottom] = useState(false);
+  const hasMoreBottomRef = useRef(false);
+  const loadingMoreBottomRef = useRef(false);
 
-  // Синхронизируем ref с актуальным стейтом
   useEffect(() => {
-  messagesRef.current = messages;
-}, [messages]);
+    hasMoreBottomRef.current = hasMoreBottom;
+  }, [hasMoreBottom]);
+  useEffect(() => {
+    loadingMoreBottomRef.current = loadingMoreBottom;
+  }, [loadingMoreBottom]);
+  // Синхронизируем рефы с актуальным стейтом
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    loadingMoreRef.current = loadingMore;
+  }, [loadingMore]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
 
   // Загрузка при смене чата
   useEffect(() => {
-	initialLoadingRef.current = true;
-    console.log(`[useChatMessages] chatId changed → "${chatId}". Resetting state.`);
     setMessages([]);
-    setFirstUnreadId(null);
+    setScrollIntent(null);
+    setHighlightId(null);
     setHasMore(true);
-	setInitialLoading(true);
-
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
+    hasMoreRef.current = true;
+    loadingMoreBottomRef.current = false;
+    hasMoreBottomRef.current = false;
     let cancelled = false;
 
     (async () => {
-      console.log(`[useChatMessages][${chatId}] Fetching unread messages...`);
-      const unread = await getUnreadMessages(chatId);
+      try {
+        const unread = await getUnreadMessages(chatId);
+        console.log(
+          `[useChatMessages][${chatId}] unread response: hasMoreTop=${unread.hasMoreTop}, hasMoreBottom=${unread.hasMoreBottom}, count=${unread.messages?.length}`,
+        );
+        if (cancelled) return;
 
-      if (cancelled) {
-        console.warn(`[useChatMessages][${chatId}] Request cancelled (chatId changed during getUnreadMessages). Ignoring result.`);
-        return;
-      }
+        if (Array.isArray(unread.messages) && unread.messages.length > 0) {
+          setMessages(unread.messages);
+          setHasMore(unread.hasMoreTop === true);
+          setHasMoreBottom(unread.hasMoreBottom === true);
+          setScrollIntent({ type: "unread", id: unread.firstUnreadId });
 
-      console.log(`[useChatMessages][${chatId}] getUnreadMessages result:`, {
-        firstUnreadId: unread?.firstUnreadId,
-        messagesCount: Array.isArray(unread?.messages) ? unread.messages.length : "not array",
-        raw: unread,
-      });
+          if (unread.messages.length > 0) {
+            const lastMsg = unread.messages[unread.messages.length - 1];
+            onInitChat(chatId, new Date(lastMsg.createdAt).getTime());
+          }
+        } else {
+          const data = await getMessages(chatId, PAGE_SIZE, 0);
+          if (cancelled) return;
+          const msgs: Message[] = Array.isArray(data) ? data : [];
+          setMessages(msgs);
+          setHasMore(msgs.length >= PAGE_SIZE);
+          setScrollIntent({ type: "bottom" });
 
-      if (unread.firstUnreadId && Array.isArray(unread.messages)) {
-        console.log(`[useChatMessages][${chatId}] Has unread. Setting ${unread.messages.length} messages. firstUnreadId="${unread.firstUnreadId}"`);
-        setMessages(unread.messages);
-        setFirstUnreadId(unread.firstUnreadId);
-        setHasMore(unread.messages.length >= PAGE_SIZE);
-      } else {
-        console.log(`[useChatMessages][${chatId}] No unread. Fetching latest messages...`);
-        const data = await getMessages(chatId, PAGE_SIZE, 0);
-
-        if (cancelled) {
-          console.warn(`[useChatMessages][${chatId}] Request cancelled (chatId changed during getMessages). Ignoring result.`);
-          return;
+          if (msgs.length > 0) {
+            const lastMsg = msgs[msgs.length - 1];
+            onInitChat(chatId, new Date(lastMsg.createdAt).getTime());
+          }
+          msgs.forEach((m) => {
+            if (m.forwardedFrom?.senderId) loadUser(m.forwardedFrom.senderId);
+          });
         }
-
-        const msgs: Message[] = Array.isArray(data) ? data : [];
-        console.log(`[useChatMessages][${chatId}] getMessages result: ${msgs.length} messages.`);
-
-        if (msgs.length > 0) {
-          console.log(`[useChatMessages][${chatId}] First msg:`, msgs[0]?.id, msgs[0]?.createdAt);
-          console.log(`[useChatMessages][${chatId}] Last msg:`, msgs[msgs.length - 1]?.id, msgs[msgs.length - 1]?.createdAt);
+      } catch (e) {
+        console.error(`[useChatMessages][${chatId}] initial load failed:`, e);
+        if (!cancelled) {
+          setHasMoreBottom(false);
+          setScrollIntent({ type: "bottom" });
         }
-
-        setMessages(msgs);
-        setHasMore(msgs.length >= PAGE_SIZE);
       }
-	  if (!cancelled) {
-      setInitialLoading(false); // ← только после успешной загрузки
-	  initialLoadingRef.current = false;
-    }
-	
     })();
 
     return () => {
-      console.log(`[useChatMessages] Cleanup for chatId="${chatId}". Setting cancelled=true.`);
       cancelled = true;
     };
   }, [chatId]);
@@ -95,126 +121,163 @@ export function useChatMessages(chatId: string) {
   // Входящие сообщения по WebSocket
   useEffect(() => {
     return onWSMessage((msg) => {
+      if (msg.event === "message:new") {
+        console.log("[WS message:new]", {
+          dataChatId: msg.data?.chatId,
+          currentChatId: chatId,
+          match: msg.data?.chatId === chatId,
+          data: msg.data,
+        });
+      }
       if (msg.event === "message:new" && msg.data.chatId === chatId) {
-        console.log(`[useChatMessages][${chatId}] WS message:new received:`, msg.data.id, msg.data.createdAt);
         setMessages((prev) => [...prev, msg.data]);
+        if (msg.data.forwardedFrom?.senderId) {
+          loadUser(msg.data.forwardedFrom.senderId);
+        }
         markRead(chatId, msg.data.id);
       }
     });
   }, [chatId]);
 
+  const loadMoreBottom = useCallback(async () => {
+    if (loadingMoreBottomRef.current || !hasMoreBottomRef.current) return;
+
+    const msgs = messagesRef.current;
+    if (msgs.length === 0) return;
+
+    const lastMsg = msgs[msgs.length - 1];
+    setLoadingMoreBottom(true);
+
+    try {
+      // запрашиваем сообщения после последнего известного
+      const data = await getMessagesAfter(chatId, lastMsg.id, PAGE_SIZE);
+      const newer: Message[] = Array.isArray(data) ? data : [];
+
+      if (newer.length === 0) {
+        setHasMoreBottom(false);
+        return;
+      }
+
+      newer.forEach((m) => {
+        if (m.forwardedFrom?.senderId) loadUser(m.forwardedFrom.senderId);
+      });
+
+      setMessages((current) => {
+        const existingIds = new Set(current.map((m) => m.id));
+        const fresh = newer.filter((m) => !existingIds.has(m.id));
+        return [...current, ...fresh].sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+      });
+
+      if (newer.length < PAGE_SIZE) setHasMoreBottom(false);
+    } catch (e) {
+      console.error(`[useChatMessages][${chatId}] loadMoreBottom failed:`, e);
+    } finally {
+      setLoadingMoreBottom(false);
+    }
+  }, [chatId]);
+
   // Подгрузка старых сообщений (скролл вверх)
   const loadMore = useCallback(async () => {
-	console.log(`[loadMore] called. loadingMore=${loadingMore}, hasMore=${hasMore}, initialLoadingRef=${initialLoadingRef.current}`);
-    if (loadingMore || !hasMore || initialLoadingRef.current) return;
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
 
-    const offset = messagesRef.current.length;
-    console.log(`[useChatMessages][${chatId}] loadMore called. offset=${offset}, hasMore=${hasMore}`);
+    const msgs = messagesRef.current;
+    if (msgs.length === 0) return;
 
+    const firstMsg = msgs[0]; // ← берём первое сообщение, а не offset
     setLoadingMore(true);
 
     try {
-      const data = await getMessages(chatId, PAGE_SIZE, offset);
+      const data = await getMessagesBefore(chatId, firstMsg.id, PAGE_SIZE);
       const older: Message[] = Array.isArray(data) ? data : [];
 
-      console.log(`[useChatMessages][${chatId}] loadMore got ${older.length} older messages.`);
-
       if (older.length === 0) {
-        console.log(`[useChatMessages][${chatId}] loadMore: no more messages. setHasMore(false).`);
         setHasMore(false);
         return;
       }
 
-      if (older.length > 0) {
-        console.log(`[useChatMessages][${chatId}] loadMore older range: ${older[0]?.createdAt} → ${older[older.length - 1]?.createdAt}`);
-      }
+      older.forEach((m) => {
+        if (m.forwardedFrom?.senderId) loadUser(m.forwardedFrom.senderId);
+      });
 
       setMessages((current) => {
         const existingIds = new Set(current.map((m) => m.id));
         const fresh = older.filter((m) => !existingIds.has(m.id));
-
-        console.log(`[useChatMessages][${chatId}] loadMore merging: existing=${current.length}, fresh=${fresh.length}, duplicates=${older.length - fresh.length}`);
-
-        const merged = [...fresh, ...current].sort(
+        return [...fresh, ...current].sort(
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );
-
-        console.log(`[useChatMessages][${chatId}] loadMore after merge: total=${merged.length}`);
-        console.log(`[useChatMessages][${chatId}] loadMore merged range: ${merged[0]?.createdAt} → ${merged[merged.length - 1]?.createdAt}`);
-
-        return merged;
       });
 
-      if (older.length < PAGE_SIZE) {
-        console.log(`[useChatMessages][${chatId}] loadMore: received < PAGE_SIZE, setHasMore(false).`);
-        setHasMore(false);
-      }
+      if (older.length < PAGE_SIZE) setHasMore(false);
     } catch (e) {
       console.error(`[useChatMessages][${chatId}] loadMore failed:`, e);
     } finally {
       setLoadingMore(false);
     }
-  }, [chatId, loadingMore, hasMore]);
+  }, [chatId]);
 
   // Скролл к сообщению (с подгрузкой контекста если нужно)
   const scrollToMessage = useCallback(
     async (
       id: string,
-      messageRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>,
+      messageRefs: React.MutableRefObject<
+        Record<string, HTMLDivElement | null>
+      >,
     ) => {
-      const scrollAndHighlight = () => {
-        messageRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (messageRefs.current[id]) {
+        setScrollIntent({ type: "message", id });
         setHighlightId(id);
         setTimeout(() => setHighlightId(null), 1500);
-      };
-
-      if (messageRefs.current[id]) {
-        console.log(`[useChatMessages][${chatId}] scrollToMessage: id="${id}" already in DOM. Scrolling.`);
-        scrollAndHighlight();
         return;
       }
-
-      console.log(`[useChatMessages][${chatId}] scrollToMessage: id="${id}" NOT in DOM. Loading context...`);
 
       try {
         const data = await getMessagesContext(chatId, id);
         if (!Array.isArray(data)) return;
 
-        console.log(`[useChatMessages][${chatId}] scrollToMessage context: got ${data.length} messages.`);
-
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
-          const merged = [
+          return [
             ...prev,
             ...data.filter((m: Message) => !existingIds.has(m.id)),
           ].sort(
             (a, b) =>
               new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
           );
-          console.log(`[useChatMessages][${chatId}] scrollToMessage after merge: total=${merged.length}`);
-          return merged;
         });
 
+        setScrollIntent({ type: "message", id });
         setHighlightId(id);
-        setTimeout(() => scrollAndHighlight(), 100);
+        setTimeout(() => setHighlightId(null), 1500);
       } catch (e) {
-        console.error(`[useChatMessages][${chatId}] scrollToMessage failed:`, e);
+        console.error(
+          `[useChatMessages][${chatId}] scrollToMessage failed:`,
+          e,
+        );
       }
     },
     [chatId],
   );
 
+  const consumeScrollIntent = useCallback(() => {
+    setScrollIntent(null);
+  }, []);
+
   return {
     messages,
     setMessages,
-    firstUnreadId,
-    setFirstUnreadId,
+    scrollIntent,
+    consumeScrollIntent,
     highlightId,
     hasMore,
     loadingMore,
     loadMore,
+    hasMoreBottom,
+    loadingMoreBottom,
+    loadMoreBottom,
     scrollToMessage,
-	initialLoading,
   };
 }

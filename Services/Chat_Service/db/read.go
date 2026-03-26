@@ -15,7 +15,15 @@ import (
 func (d *Database) MarkChatRead(ctx context.Context, chatID string, userID int, lastMessageID string) error {
 	_, err := d.db.ExecContext(ctx,
 		`UPDATE chat_members SET last_read_message_id = $1
-		 WHERE chat_id = $2 AND user_id = $3`,
+         WHERE chat_id = $2 AND user_id = $3
+           AND (
+               last_read_message_id IS NULL
+               OR (
+                   SELECT created_at FROM messages WHERE id = $1
+               ) > (
+                   SELECT created_at FROM messages WHERE id = last_read_message_id
+               )
+           )`,
 		lastMessageID, chatID, userID,
 	)
 	return err
@@ -24,51 +32,52 @@ func (d *Database) MarkChatRead(ctx context.Context, chatID string, userID int, 
 // GetMessagesAroundID возвращает сообщения вокруг указанного id (±around штук).
 // Используется для перехода к цитируемому или найденному сообщению.
 func (d *Database) GetMessagesAroundID(ctx context.Context, chatID string, messageID string, around int) ([]models.Message, error) {
-	query := `
-		WITH ranked AS (
-			SELECT
-				id, chat_id, sender_id, text, reply_to_id,
-				edited_at, deleted_at,
-				forwarded_sender_id, forwarded_text, forwarded_from_message_id,
-				created_at,
-				ROW_NUMBER() OVER (ORDER BY created_at ASC) AS rn
-			FROM messages
-			WHERE chat_id = $1
-		),
-		target_rn AS (
-			SELECT rn FROM ranked WHERE id = $2
-		)
-		SELECT
-			id, chat_id, sender_id, text, reply_to_id,
-			edited_at, deleted_at,
-			forwarded_sender_id, forwarded_text, forwarded_from_message_id,
-			created_at
-		FROM ranked
-		WHERE rn BETWEEN (SELECT rn FROM target_rn) - $3
-		              AND (SELECT rn FROM target_rn) + $3
-		ORDER BY created_at ASC
-	`
-
-	rows, err := d.db.QueryContext(ctx, query, chatID, messageID, around)
+	before, err := d.GetMessagesBeforeID(ctx, chatID, messageID, around)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get messages around: %w", err)
+		return nil, err
+	}
+
+	after, err := d.GetMessagesAfterID(ctx, chatID, messageID, around)
+	if err != nil {
+		return nil, err
+	}
+
+	// Берём само целевое сообщение через GetMessagesAfterID с limit=1 не подойдёт,
+	// поэтому делаем отдельный запрос с тем же SELECT что в scanMessage
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT
+			m.id, m.chat_id, m.sender_id, m.text,
+			m.reply_to_id, m.edited_at, m.deleted_at, m.created_at,
+			r.id, r.sender_id, r.text,
+			m.forwarded_sender_id, m.forwarded_text, m.forwarded_from_message_id
+		FROM messages m
+		LEFT JOIN messages r ON r.id = m.reply_to_id AND r.deleted_at IS NULL
+		WHERE m.id = $1`,
+		messageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target message: %w", err)
 	}
 	defer rows.Close()
 
-	var messages []models.Message
-	for rows.Next() {
-		msg, err := scanAroundMessage(rows)
+	var target *models.Message
+	if rows.Next() {
+		msg, err := scanMessage(rows)
 		if err != nil {
 			return nil, err
 		}
-		messages = append(messages, msg)
+		target = &msg
 	}
 
-	return messages, nil
+	result := before
+	if target != nil {
+		result = append(result, *target)
+	}
+	result = append(result, after...)
+	return result, nil
 }
 
 func (d *Database) GetMessagesFromUnread(ctx context.Context, chatID string, userID int, around int) (*models.UnreadResult, error) {
-	// Находим last_read_message_id пользователя
 	var lastReadID sql.NullString
 	err := d.db.QueryRowContext(ctx,
 		`SELECT last_read_message_id FROM chat_members
@@ -79,12 +88,10 @@ func (d *Database) GetMessagesFromUnread(ctx context.Context, chatID string, use
 		return nil, fmt.Errorf("failed to get last read: %w", err)
 	}
 
-	// Если всё прочитано — отдаём последние N сообщений обычным способом
 	if !lastReadID.Valid {
 		return nil, nil
 	}
 
-	// Находим первое непрочитанное
 	var firstUnreadID string
 	err = d.db.QueryRowContext(ctx,
 		`SELECT id FROM messages
@@ -98,14 +105,12 @@ func (d *Database) GetMessagesFromUnread(ctx context.Context, chatID string, use
 		chatID, lastReadID.String,
 	).Scan(&firstUnreadID)
 	if err == sql.ErrNoRows {
-		// Нет непрочитанных
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to find first unread: %w", err)
 	}
 
-	// Считаем количество непрочитанных
 	var totalUnread int
 	err = d.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM messages
@@ -121,16 +126,51 @@ func (d *Database) GetMessagesFromUnread(ctx context.Context, chatID string, use
 		return nil, fmt.Errorf("failed to count unread: %w", err)
 	}
 
-	// Грузим сообщения вокруг первого непрочитанного
 	messages, err := d.GetMessagesAroundID(ctx, chatID, firstUnreadID, around)
 	if err != nil {
 		return nil, err
+	}
+
+	var hasMoreTop bool
+	if len(messages) > 0 {
+		firstLoaded := messages[0]
+		err = d.db.QueryRowContext(ctx,
+			`SELECT EXISTS(
+            SELECT 1 FROM messages
+            WHERE chat_id = $1
+              AND created_at < $2
+              AND deleted_at IS NULL
+        )`,
+			chatID, firstLoaded.CreatedAt.Time,
+		).Scan(&hasMoreTop)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check hasMoreTop: %w", err)
+		}
+	}
+	// Проверяем есть ли сообщения после последнего загруженного
+	var hasMoreBottom bool
+	if len(messages) > 0 {
+		lastLoaded := messages[len(messages)-1]
+		err = d.db.QueryRowContext(ctx,
+			`SELECT EXISTS(
+				SELECT 1 FROM messages
+				WHERE chat_id = $1
+				  AND created_at > $2
+				  AND deleted_at IS NULL
+			)`,
+			chatID, lastLoaded.CreatedAt.Time,
+		).Scan(&hasMoreBottom)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check hasMoreBottom: %w", err)
+		}
 	}
 
 	return &models.UnreadResult{
 		Messages:      messages,
 		FirstUnreadID: firstUnreadID,
 		TotalUnread:   totalUnread,
+		HasMoreBottom: hasMoreBottom,
+		HasMoreTop:    hasMoreTop,
 	}, nil
 }
 

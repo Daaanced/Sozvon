@@ -1,10 +1,11 @@
-//sozvon-client\src\components\chat\ChatMessages.tsx
+// sozvon-client/src/components/chat/ChatMessages.tsx
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useLayoutEffect } from "react";
 import MessageBubble from "./MessageBubble";
 import { styles } from "./chat.styles";
 import type { Message } from "./chat.types";
 import type { User } from "../../api/users";
+import type { ScrollIntent } from "./hooks/useChatMessages";
 
 type Props = {
   chatId: string;
@@ -15,7 +16,11 @@ type Props = {
   onForward: (message: Message) => void;
   onEdit: (message: Message) => void;
   onDelete: (message: Message) => void;
-  observeMessage: (el: HTMLDivElement | null, id: string, createdAt: string) => void;
+  observeMessage: (
+    el: HTMLDivElement | null,
+    id: string,
+    createdAt: string,
+  ) => void;
   unobserveMessage: (el: HTMLDivElement | null) => void;
   myId: number;
   highlightId: string | null;
@@ -23,15 +28,19 @@ type Props = {
     id: string,
     messageRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>,
   ) => void;
-  firstUnreadId: string | null;
+  scrollIntent: ScrollIntent;
+  onIntentConsumed: () => void;
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
-  initialLoading: boolean;
+  hasMoreBottom: boolean;
+  loadingMoreBottom: boolean;
+  onLoadMoreBottom: () => void;
 };
 
 function isSameDay(a: string, b: string) {
-  const d1 = new Date(a), d2 = new Date(b);
+  const d1 = new Date(a),
+    d2 = new Date(b);
   return (
     d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
@@ -51,122 +60,133 @@ export default function ChatMessages({
   myId,
   highlightId,
   onScrollToMessage,
-  firstUnreadId,
+  scrollIntent,
+  onIntentConsumed,
   observeMessage,
   unobserveMessage,
   hasMore,
   loadingMore,
   onLoadMore,
-  initialLoading,
+  hasMoreBottom,
+  loadingMoreBottom,
+  onLoadMoreBottom,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
   const prevScrollHeight = useRef<number | null>(null);
-  const prevLoadingMore = useRef(false);
-  const scrolledToUnread = useRef(false);
-  const initialScrollDoneRef = useRef(false);
+  const firstUnreadIdRef = useRef<string | null>(null);
 
-  // 1. Сброс всего при смене чата
+  if (scrollIntent?.type === "unread" && !firstUnreadIdRef.current) {
+    firstUnreadIdRef.current = scrollIntent.id;
+  }
+
+  // 1. Сброс при смене чата
   useEffect(() => {
-    console.log(`[ChatMessages] chatId changed, resetting`);
-    scrolledToUnread.current = false;
-    initialScrollDoneRef.current = false;
-    prevScrollHeight.current = null;
-    if (ref.current) {
-      ref.current.scrollTop = 0;
-    }
+    messageRefs.current = {};
+    firstUnreadIdRef.current = null;
+    if (ref.current) ref.current.scrollTop = 0;
   }, [chatId]);
 
-  // 2. Sentinel observer для подгрузки старых сообщений
-  useEffect(() => {
-  if (initialLoading) return; // не создаём observer пока грузится
-  const sentinel = sentinelRef.current;
-  if (!sentinel) return;
+  // 2. Применение scroll intent — useLayoutEffect чтобы DOM уже содержал новые сообщения
+  useLayoutEffect(() => {
+    if (!scrollIntent || messages.length === 0) return;
 
-  console.log(`[ChatMessages] sentinel observer created`);
-
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      console.log(`[ChatMessages] sentinel intersecting=${entry.isIntersecting}`);
-      if (entry.isIntersecting) {
-        prevScrollHeight.current = ref.current?.scrollHeight ?? null;
-        onLoadMore();
-      }
-    },
-    { threshold: 0.1 },
-  );
-  observer.observe(sentinel);
-  return () => observer.disconnect();
-}, [onLoadMore, initialLoading]);
-
-  // 3. Ресторация позиции скролла после подгрузки старых сообщений
-  useEffect(() => {
-    const wasLoading = prevLoadingMore.current;
-    prevLoadingMore.current = loadingMore;
-
-    if (wasLoading && !loadingMore && prevScrollHeight.current !== null) {
-      const el = ref.current;
-      if (!el) return;
-
-      const diff = el.scrollHeight - prevScrollHeight.current;
-      console.log(`[ChatMessages] loadMore scroll restore: diff=${diff}, scrollTopBefore=${el.scrollTop}`);
-      el.scrollTop += diff;
-      prevScrollHeight.current = null;
-      console.log(`[ChatMessages] scrollTop after restore: ${el.scrollTop}`);
-    }
-  }, [loadingMore, messages]);
-
-  // 4. Скролл к первому непрочитанному
-  useEffect(() => {
-    if (!firstUnreadId || scrolledToUnread.current) return;
-    const el = messageRefs.current[firstUnreadId];
+    const el = ref.current;
     if (!el) return;
-    console.log(`[ChatMessages] Scrolling to firstUnreadId="${firstUnreadId}"`);
-    el.scrollIntoView({ behavior: "instant", block: "center" });
-    scrolledToUnread.current = true;
-  }, [messages, firstUnreadId]);
 
-  // 5. Скролл вниз при первой загрузке без unread
-  useEffect(() => {
-  if (initialScrollDoneRef.current) return;
-  if (messages.length === 0) return;
-  if (firstUnreadId) return;
-
-  const el = ref.current;
-  if (!el) return;
-
-  el.scrollTop = el.scrollHeight;
-  initialScrollDoneRef.current = true;
-  console.log(`[ChatMessages] Scrolled to bottom: scrollTop=${el.scrollTop}, scrollHeight=${el.scrollHeight}`);
-
-  // Проверяем через 500мс не изменилась ли высота
-  const t1 = setTimeout(() => {
-    console.log(`[ChatMessages] 500ms later: scrollTop=${el.scrollTop}, scrollHeight=${el.scrollHeight}, isAtBottom=${el.scrollTop + el.clientHeight >= el.scrollHeight - 5}`);
-  }, 500);
-  const t2 = setTimeout(() => {
-    console.log(`[ChatMessages] 1500ms later: scrollTop=${el.scrollTop}, scrollHeight=${el.scrollHeight}, isAtBottom=${el.scrollTop + el.clientHeight >= el.scrollHeight - 5}`);
-  }, 1500);
-
-  return () => { clearTimeout(t1); clearTimeout(t2); };
-}, [messages, firstUnreadId]);
-
-  // Лог для отладки
-  useEffect(() => {
-    if (messages.length > 0) {
-      const el = ref.current;
-      console.log(`[ChatMessages] After render: scrollTop=${el?.scrollTop}, scrollHeight=${el?.scrollHeight}, clientHeight=${el?.clientHeight}`);
+    if (scrollIntent.type === "bottom") {
+      el.scrollTop = el.scrollHeight;
+      onIntentConsumed();
+      return;
     }
+
+    const target = messageRefs.current[scrollIntent.id];
+    if (!target) return; // сообщение ещё не в DOM — ждём следующего рендера
+
+    if (scrollIntent.type === "unread") {
+      target.scrollIntoView({ behavior: "instant", block: "center" });
+      setTimeout(onIntentConsumed, 100);
+      return;
+    } else if (scrollIntent.type === "message") {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    onIntentConsumed();
+  }, [scrollIntent, messages]);
+
+  useEffect(() => {
+    console.log(
+      `[ChatMessages][${chatId}] hasMoreBottom changed: ${hasMoreBottom}, sentinel exists: ${!!bottomSentinelRef.current}`,
+    );
+  }, [hasMoreBottom]);
+
+  // 3. Sentinel observer для подгрузки старых сообщений
+  useEffect(() => {
+    console.log(
+      `[ChatMessages][${chatId}] topSentinel effect run, hasMore=${hasMore}, sentinel=${!!sentinelRef.current}`,
+    );
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        console.log(
+          `[ChatMessages][${chatId}] topSentinel intersecting=${entry.isIntersecting}`,
+        );
+        if (entry.isIntersecting) {
+          prevScrollHeight.current = ref.current?.scrollHeight ?? null;
+          onLoadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [onLoadMore, hasMore]);
+
+  useEffect(() => {
+    console.log(
+      `[ChatMessages][${chatId}] bottomSentinel effect run, hasMoreBottom=${hasMoreBottom}, sentinel=${!!bottomSentinelRef.current}`,
+    );
+    const sentinel = bottomSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        console.log(
+          `[ChatMessages][${chatId}] bottomSentinel intersecting=${entry.isIntersecting}`,
+        );
+        if (entry.isIntersecting) onLoadMoreBottom();
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [onLoadMoreBottom, hasMoreBottom]);
+
+  // 4. Восстановление позиции скролла после подгрузки — useLayoutEffect чтобы не было флика
+  useLayoutEffect(() => {
+    if (prevScrollHeight.current === null) return;
+    const el = ref.current;
+    if (!el) return;
+
+    el.scrollTop = el.scrollHeight - prevScrollHeight.current;
+    prevScrollHeight.current = null;
   }, [messages]);
 
   function handleScrollToMessage(id: string) {
     onScrollToMessage(id, messageRefs);
   }
 
+  // Вычисляем firstUnreadId из intent один раз, чтобы рендерить разделитель
+
   return (
     <div ref={ref} style={styles.messageList}>
-      {hasMore && !initialLoading && <div ref={sentinelRef} style={{ height: 1 }} />}
+      {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
       {loadingMore && <div style={styles.loadingMore}>Загрузка...</div>}
 
       {messages.map((m, index) => {
@@ -178,7 +198,7 @@ export default function ChatMessages({
 
         return (
           <div key={m.id}>
-            {m.id === firstUnreadId && (
+            {m.id === firstUnreadIdRef.current && (
               <div style={styles.unreadDivider}>Новые сообщения</div>
             )}
             <MessageBubble
@@ -210,6 +230,14 @@ export default function ChatMessages({
           </div>
         );
       })}
+      {loadingMoreBottom && <div style={styles.loadingMore}>Загрузка...</div>}
+      {hasMoreBottom && (
+        <div
+          ref={bottomSentinelRef}
+          style={{ height: 1 }}
+          data-debug="bottom-sentinel"
+        />
+      )}
     </div>
   );
 }

@@ -58,6 +58,8 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/chats/{chatId}/read", h.MarkRead).Methods("POST", "OPTIONS")
 
 	// Сообщения
+	r.HandleFunc("/chats/{chatId}/messages/before", h.GetMessagesBefore).Methods("GET", "OPTIONS")
+	r.HandleFunc("/chats/{chatId}/messages/after", h.GetMessagesAfter).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages", h.SendMessage).Methods("POST", "OPTIONS")
 	r.HandleFunc("/chats/{chatId}/messages/{messageId}/context", h.GetMessagesContext).Methods("GET", "OPTIONS")

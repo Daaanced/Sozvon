@@ -20,6 +20,7 @@ type ChatContextType = {
   myLogin: string;
   me: User | null;
   unread: Record<string, boolean>;
+  loadUser: (id: number) => void;
   markRead: (chatId: string, lastMessageId?: string) => void;
   notifyOwnMessage: (chatId: string, createdAt: string) => void;
   getSafeUser: (id: number) => User;
@@ -45,7 +46,9 @@ export function useChatContext() {
   return ctx;
 }
 
-function parseTokenPayload(token: string): { id: number; login: string } | null {
+function parseTokenPayload(
+  token: string,
+): { id: number; login: string } | null {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const id = parseInt(payload.user_id, 10);
@@ -269,6 +272,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         notifyOwnMessage,
         getSafeUser,
         setActiveChat,
+        loadUser: loadUserById,
       }}
     >
       {children}

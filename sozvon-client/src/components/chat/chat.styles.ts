@@ -87,13 +87,62 @@ export const styles: Record<string, React.CSSProperties> = {
     cursor: "zoom-in",
     display: "block",
   },
-  inlineVideo: {
-    maxWidth: "60%",
-    maxHeight: 360,
-    borderRadius: 8,
-    display: "block",
-    outline: "none",
+  // Одно изображение — телеграм-стиль
+  singleImageWrapper: {
+    position: "relative" as const,
+    maxWidth: 320,
     marginTop: 6,
+    borderRadius: 10,
+    overflow: "hidden",
+    cursor: "pointer",
+    lineHeight: "0",
+    display: "inline-block",
+  },
+  singleImageEl: {
+    display: "block",
+    width: "100%",
+    maxWidth: 320,
+    objectFit: "contain" as const,
+  },
+  singleImageTime: {
+    position: "absolute" as const,
+    bottom: 6,
+    right: 8,
+    fontSize: 11,
+    color: "#fff",
+    background: "rgba(0,0,0,0.35)",
+    borderRadius: 6,
+    padding: "1px 5px",
+    lineHeight: "18px",
+  },
+
+  // Несколько изображений — квадратные thumbnail (без изменений)
+  gridImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 6,
+    objectFit: "cover" as const,
+    cursor: "zoom-in",
+    display: "block",
+  },
+
+  // Видео — телеграм-стиль
+  singleVideoWrapper: {
+    position: "relative" as const,
+    maxWidth: 320,
+    marginTop: 6,
+    borderRadius: 10,
+    overflow: "hidden",
+    lineHeight: "0",
+    display: "inline-block",
+  },
+  singleVideoEl: {
+    display: "block",
+    width: "100%",
+    maxWidth: 320,
+    aspectRatio: "16 / 9",
+    objectFit: "cover" as const,
+    outline: "none",
   },
   fileLink: {
     display: "inline-flex",
@@ -268,25 +317,9 @@ export const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gap: 4,
     marginTop: 6,
+    justifyContent: "start", // или center если хочешь центр
   },
-  // Одно изображение — крупное
-  singleImage: {
-    maxWidth: "60%",
-    maxHeight: 360,
-    borderRadius: 8,
-    objectFit: "cover" as const,
-    cursor: "zoom-in",
-    display: "block",
-  },
-  // Несколько изображений — квадратные thumbnail
-  gridImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 6,
-    objectFit: "cover" as const,
-    cursor: "zoom-in",
-    display: "block",
-  },
+
   // Счётчик файлов
   fileCounter: {
     display: "flex",

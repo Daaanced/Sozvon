@@ -1,5 +1,6 @@
 // sozvon-client/src/api/chats.ts
 import { requestAuth } from "./http";
+import { PendingFile } from "../components/chat/chat.types";
 
 const API_URL = "http://92.127.177.190:8080";
 
@@ -35,7 +36,7 @@ export function sendMessage(chatId: string, text: string, replyToId?: string) {
 export function uploadFiles(
   chatId: string,
   text: string,
-  files: File[],
+  pendingFiles: PendingFile[],
   replyToId?: string,
   onProgress?: (percent: number) => void,
 ): Promise<any> {
@@ -49,7 +50,19 @@ export function uploadFiles(
 
     if (replyToId) formData.append("replyToId", replyToId);
 
-    files.forEach((file) => formData.append("files", file));
+    // файлы
+    pendingFiles.forEach((pf) => formData.append("files", pf.file));
+
+    // мета
+    formData.append(
+      "meta",
+      JSON.stringify(
+        pendingFiles.map((pf) => ({
+          width: pf.width,
+          height: pf.height,
+        })),
+      ),
+    );
 
     const xhr = new XMLHttpRequest();
 
@@ -116,4 +129,24 @@ export function getChatInfo(chatId: string) {
 
 export function getUnreadMessages(chatId: string) {
   return requestAuth(`/chats/${chatId}/messages/unread`);
+}
+
+export function getMessagesAfter(
+  chatId: string,
+  afterMessageId: string,
+  limit = 50,
+) {
+  return requestAuth(
+    `/chats/${chatId}/messages/after?messageId=${afterMessageId}&limit=${limit}`,
+  );
+}
+
+export function getMessagesBefore(
+  chatId: string,
+  beforeMessageId: string,
+  limit = 50,
+) {
+  return requestAuth(
+    `/chats/${chatId}/messages/before?messageId=${beforeMessageId}&limit=${limit}`,
+  );
 }

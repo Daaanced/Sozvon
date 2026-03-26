@@ -1,6 +1,6 @@
 // sozvon-client/src/components/chat/Chat.tsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useChatMessages } from "./hooks/useChatMessages";
 import { useChatActions } from "./hooks/useChatActions";
 import { useFileUpload } from "./hooks/useFileUpload";
@@ -18,15 +18,33 @@ import { Message } from "./chat.types";
 type Props = { chatId: string };
 
 export default function Chat({ chatId }: Props) {
-  const { getSafeUser, chats, myId, markRead, setActiveChat } = useChatContext();
+  const { getSafeUser, chats, myId, markRead, setActiveChat } =
+    useChatContext();
 
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
     null,
   );
 
-  const { messages, setMessages, firstUnreadId, highlightId,
-  hasMore, loadingMore, loadMore, scrollToMessage, initialLoading } = useChatMessages(chatId);
+  const { observe, unobserve, flush, reset, initChat, setActiveChatId } =
+    useVisibleMessages((id) => {
+      markRead(chatId, id);
+    });
+
+  const {
+    messages,
+    setMessages,
+    scrollIntent,
+    consumeScrollIntent,
+    highlightId,
+    hasMore,
+    loadingMore,
+    loadMore,
+    hasMoreBottom,
+    loadingMoreBottom,
+    loadMoreBottom,
+    scrollToMessage,
+  } = useChatMessages(chatId, initChat);
 
   const {
     replyTo,
@@ -49,45 +67,56 @@ export default function Chat({ chatId }: Props) {
     handleFileRemove,
   } = useFileUpload();
 
-  function handleSend() {
-    send({ text, pendingFiles, replyTo, onClear: () => setText("") });
-  }
-
   const [text, setText] = useState("");
 
   const chat = chats.find((c) => c.chatId === chatId);
   const withId = chat?.members.find((m) => m !== myId);
   const companion = withId ? getSafeUser(withId) : null;
-  const chatIdRef = useRef(chatId);
 
   useEffect(() => {
-  chatIdRef.current = chatId;
-  setActiveChat(chatId);
-  return () => setActiveChat(null);
-}, [chatId]);
+    reset();
+    setActiveChat(chatId);
+    setActiveChatId(chatId);
 
-  const { observe, unobserve, flush, reset, initChat } = useVisibleMessages(
-  (id) => markRead(chatId, id),
-);
+    return () => {
+      flush(chatId);
+      setActiveChat(null);
+    };
+  }, [chatId]);
 
-	useEffect(() => {
-	if (messages.length === 0) return;
-	if (firstUnreadId) return; // если есть unread — позиция уже правильная на сервере
+  // После загрузки и применения скролла
+  //   useEffect(() => {
+  //   if (scrollIntent !== null) return;
+  //   if (messages.length === 0) return;
 
-	const lastMsg = messages[messages.length - 1];
-	initChat(chatId, new Date(lastMsg.createdAt).getTime());
-	}, [chatId, messages, firstUnreadId]);
+  //   // проверяем что сообщения принадлежат текущему чату
+  //   const lastMsg = messages[messages.length - 1];
+  //   console.log(`[Chat][${chatId}] initChat check: lastMsg.chatId=${lastMsg.chatId}`);
+  //   if (!lastMsg.chatId || lastMsg.chatId !== chatId) return; // ← добавить
+  // }, [chatId, scrollIntent]);
 
-	useEffect(() => {
-	const currentChatId = chatId;
-	return () => {
-		flush(currentChatId);
-	};
-	}, [chatId, flush]);
+  // Логируем каждое изменение scrollIntent
+  useEffect(() => {
+    console.log(
+      `[Chat][${chatId}] scrollIntent changed:`,
+      JSON.stringify(scrollIntent),
+    );
+  }, [scrollIntent]);
 
-	useEffect(() => {
-	reset();
-	}, [chatId, reset]);
+  // Логируем изменение messages
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const first = messages[0];
+    const last = messages[messages.length - 1];
+    console.log(
+      `[Chat][${chatId}] messages updated: count=${messages.length}, ` +
+        `first="${first.id}"(${first.createdAt}), last="${last.id}"(${last.createdAt}), hasMore=${hasMore}`,
+    );
+  }, [messages]);
+
+  function handleSend() {
+    send({ text, pendingFiles, replyTo, onClear: () => setText("") });
+  }
 
   return (
     <div style={styles.chatWrapper}>
@@ -129,13 +158,16 @@ export default function Chat({ chatId }: Props) {
         myId={myId}
         highlightId={highlightId}
         onScrollToMessage={scrollToMessage}
-        firstUnreadId={firstUnreadId}
+        scrollIntent={scrollIntent}
+        onIntentConsumed={consumeScrollIntent}
         observeMessage={observe}
-		unobserveMessage={unobserve}
-		hasMore={hasMore}
-		loadingMore={loadingMore}
-		onLoadMore={loadMore}
-		initialLoading={initialLoading}
+        unobserveMessage={unobserve}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        hasMoreBottom={hasMoreBottom}
+        loadingMoreBottom={loadingMoreBottom}
+        onLoadMoreBottom={loadMoreBottom}
       />
 
       <ChatInput

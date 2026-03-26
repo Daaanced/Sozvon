@@ -1,5 +1,3 @@
-//sozvon-client\src\components\chat\MessageBubble.tsx
-
 import { styles } from "./chat.styles";
 import type { Message } from "./chat.types";
 import type { User } from "../../api/users";
@@ -79,8 +77,6 @@ export default function MessageBubble({
     m.attachments?.filter(
       (a) => !isImage(a.mimeType) && !isVideo(a.mimeType),
     ) ?? [];
-
-  const multipleImages = imageAttachments.length > 1;
 
   const menuBtnRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
@@ -173,7 +169,6 @@ export default function MessageBubble({
         ...(hovered && styles.bubbleHover),
       }}
     >
-      {/* Левая колонка */}
       {isGroupStart ? (
         <img src={user.picture} style={styles.avatar} alt={user.name} />
       ) : (
@@ -182,7 +177,6 @@ export default function MessageBubble({
         </div>
       )}
 
-      {/* Правая колонка */}
       <div style={styles.groupContent}>
         {isGroupStart && (
           <div style={styles.headerLine}>
@@ -191,7 +185,6 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Reply */}
         {m.replyToMessage && (
           <div
             onClick={() => onScrollToMessage(m.replyToMessage!.id)}
@@ -209,7 +202,6 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Forwarded */}
         {m.forwardedFrom && (
           <div style={styles.forwardBlock}>
             <div style={styles.forwardAuthor}>
@@ -219,51 +211,128 @@ export default function MessageBubble({
             {m.forwardedFrom.text && (
               <div style={styles.forwardText}>
                 {m.forwardedFrom.text.slice(0, 120)}
-                {m.forwardedFrom.text.length > 120 ? "..." : ""}
               </div>
             )}
 
-            {(m.forwardedFrom.attachments?.length ?? 0) > 0 && (
-              <div style={styles.forwardAttachments}>
-                {m.forwardedFrom.attachments!.map((att) => {
-                  if (isImage(att.mimeType)) {
-                    return (
-                      <img
+            {(m.forwardedFrom.attachments?.length ?? 0) > 0 &&
+              (() => {
+                const fwd = m.forwardedFrom;
+                const fwdImages = fwd.attachments!.filter((a) =>
+                  isImage(a.mimeType),
+                );
+                const fwdVideos = fwd.attachments!.filter((a) =>
+                  isVideo(a.mimeType),
+                );
+                const fwdFiles = fwd.attachments!.filter(
+                  (a) => !isImage(a.mimeType) && !isVideo(a.mimeType),
+                );
+                return (
+                  <>
+                    {fwdImages.length === 1 ? (
+                      <div
+                        style={{
+                          ...styles.singleImageWrapper,
+                          marginTop: m.text ? 6 : 0,
+                          aspectRatio:
+                            fwdImages[0].width && fwdImages[0].height
+                              ? `${fwdImages[0].width} / ${fwdImages[0].height}`
+                              : "1 / 1",
+                          maxWidth: 320,
+                          width: "100%",
+                        }}
+                        onClick={() => onImageClick(fwdImages[0].url)}
+                      >
+                        <img
+                          src={fwdImages[0].url}
+                          style={{
+                            ...styles.singleImageEl,
+                            aspectRatio: undefined,
+                          }}
+                        />
+                        <span style={styles.singleImageTime}>
+                          {formatTime(m.createdAt)}
+                        </span>
+                      </div>
+                    ) : fwdImages.length > 1 ? (
+                      <div
+                        style={{
+                          ...styles.imageGrid,
+                          gridTemplateColumns: "repeat(auto-fill, 80px)",
+                          marginTop: m.forwardedFrom.text ? 6 : 0,
+                        }}
+                      >
+                        {fwdImages.map((att) => (
+                          <div
+                            key={att.id}
+                            style={{
+                              width: 80,
+                              aspectRatio: "1 / 1",
+                              overflow: "hidden",
+                              borderRadius: 6,
+                            }}
+                          >
+                            <img
+                              src={att.url}
+                              style={styles.gridImage}
+                              onClick={() => onImageClick(att.url)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {fwdVideos.map((att) => (
+                      <div
                         key={att.id}
-                        src={att.url}
-                        style={styles.forwardImage}
-                        onClick={() => onImageClick(att.url)}
-                      />
-                    );
-                  }
-                  if (isVideo(att.mimeType)) {
-                    return (
-                      <video
-                        key={att.id}
-                        src={att.url}
-                        controls
-                        style={styles.forwardVideo}
-                      />
-                    );
-                  }
-                  return (
-                    <a
-                      key={att.id}
-                      href={att.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={styles.forwardFileLink}
-                    >
-                      📎 {att.fileName}
-                    </a>
-                  );
-                })}
-              </div>
-            )}
+                        style={{
+                          ...styles.singleVideoWrapper,
+                          marginTop: m.text ? 6 : 0,
+                          aspectRatio:
+                            att.width && att.height
+                              ? `${att.width} / ${att.height}`
+                              : "16 / 9",
+                          maxWidth: 320,
+                          width: "100%",
+                        }}
+                      >
+                        <video
+                          src={att.url}
+                          controls
+                          style={{
+                            ...styles.singleVideoEl,
+                            aspectRatio: undefined,
+                            width: "100%",
+                            height: "100%",
+                          }}
+                        />
+                      </div>
+                    ))}
+
+                    {fwdFiles.length > 0 && (
+                      <div style={styles.attachments}>
+                        {fwdFiles.map((att) => (
+                          <a
+                            key={att.id}
+                            href={att.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={styles.fileLink}
+                          >
+                            <span style={styles.fileIcon}>📎</span>
+                            <span style={styles.fileName}>{att.fileName}</span>
+                            <span style={styles.fileSize}>
+                              {formatBytes(att.size)}
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
           </div>
         )}
 
-        {/* Text */}
         {m.deletedAt ? (
           <div style={{ ...styles.messageText, ...styles.deletedMessage }}>
             Сообщение удалено
@@ -275,38 +344,84 @@ export default function MessageBubble({
           </>
         )}
 
-        {/* Images */}
-        {imageAttachments.length > 0 && (
+        {imageAttachments.length === 1 ? (
+          <div
+            style={{
+              ...styles.singleImageWrapper,
+              marginTop: m.text ? 6 : 0,
+              aspectRatio:
+                imageAttachments[0].width && imageAttachments[0].height
+                  ? `${imageAttachments[0].width} / ${imageAttachments[0].height}`
+                  : "1 / 1",
+              maxWidth: 320,
+              width: "100%",
+            }}
+            onClick={() => onImageClick(imageAttachments[0].url)}
+          >
+            <img
+              src={imageAttachments[0].url}
+              style={{ ...styles.singleImageEl, aspectRatio: undefined }}
+            />
+            <span style={styles.singleImageTime}>
+              {formatTime(m.createdAt)}
+            </span>
+          </div>
+        ) : imageAttachments.length > 1 ? (
           <div
             style={{
               ...styles.imageGrid,
-              gridTemplateColumns: multipleImages
-                ? "repeat(auto-fill, 80px)"
-                : "1fr",
+              gridTemplateColumns: "repeat(auto-fill, 80px)",
+              marginTop: m.text ? 10 : 4,
+              marginBottom: 4,
             }}
           >
             {imageAttachments.map((att) => (
-              <img
+              <div
                 key={att.id}
-                src={att.url}
-                style={multipleImages ? styles.gridImage : styles.singleImage}
-                onClick={() => onImageClick(att.url)}
-              />
+                style={{
+                  width: 80,
+                  aspectRatio: "1 / 1",
+                  overflow: "hidden",
+                  borderRadius: 6,
+                }}
+              >
+                <img
+                  src={att.url}
+                  style={styles.gridImage}
+                  onClick={() => onImageClick(att.url)}
+                />
+              </div>
             ))}
           </div>
-        )}
+        ) : null}
 
-        {/* Videos */}
         {videoAttachments.map((att) => (
-          <video
+          <div
             key={att.id}
-            src={att.url}
-            controls
-            style={styles.inlineVideo}
-          />
+            style={{
+              ...styles.singleVideoWrapper,
+              marginTop: m.text ? 6 : 0,
+              aspectRatio:
+                att.width && att.height
+                  ? `${att.width} / ${att.height}`
+                  : "16 / 9",
+              maxWidth: 320,
+              width: "100%",
+            }}
+          >
+            <video
+              src={att.url}
+              controls
+              style={{
+                ...styles.singleVideoEl,
+                aspectRatio: undefined,
+                width: "100%",
+                height: "100%",
+              }}
+            />
+          </div>
         ))}
 
-        {/* Files */}
         {fileAttachments.length > 0 && (
           <div style={styles.attachments}>
             {fileAttachments.map((att) => (
@@ -325,7 +440,6 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Actions */}
         {hovered && (
           <div style={styles.actionsOverlay}>
             <button onClick={() => onReply(m)} style={styles.actionBtn}>

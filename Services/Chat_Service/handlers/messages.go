@@ -299,7 +299,55 @@ func (h *ChatHandler) GetUnreadMessages(w http.ResponseWriter, r *http.Request) 
 		"messages":      result.Messages,
 		"firstUnreadId": result.FirstUnreadID,
 		"totalUnread":   result.TotalUnread,
+		"hasMoreTop":    result.HasMoreTop,
+		"hasMoreBottom": result.HasMoreBottom,
 	})
+}
+
+func (h *ChatHandler) GetMessagesAfter(w http.ResponseWriter, r *http.Request) {
+	chatID := mux.Vars(r)["chatId"]
+	messageID := r.URL.Query().Get("messageId")
+	if messageID == "" {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "messageId required")
+		return
+	}
+
+	limit, _ := h.getPaginationParams(r)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	messages, err := h.db.GetMessagesAfterID(ctx, chatID, messageID, limit)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", err.Error())
+		return
+	}
+
+	h.enrichMessages(ctx, messages)
+	respondWithJSON(w, http.StatusOK, messages)
+}
+
+func (h *ChatHandler) GetMessagesBefore(w http.ResponseWriter, r *http.Request) {
+	chatID := mux.Vars(r)["chatId"]
+	messageID := r.URL.Query().Get("messageId")
+	if messageID == "" {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "messageId required")
+		return
+	}
+
+	limit, _ := h.getPaginationParams(r)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	messages, err := h.db.GetMessagesBeforeID(ctx, chatID, messageID, limit)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "database_error", err.Error())
+		return
+	}
+
+	h.enrichMessages(ctx, messages)
+	respondWithJSON(w, http.StatusOK, messages)
 }
 
 // enrichMessages подгружает вложения для списка сообщений
@@ -374,6 +422,17 @@ func (h *ChatHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 		replyToID = &replyToIDStr
 	}
 
+	metaJSON := r.FormValue("meta")
+
+	var meta []struct {
+		Width  *int `json:"width"`
+		Height *int `json:"height"`
+	}
+
+	if metaJSON != "" {
+		_ = json.Unmarshal([]byte(metaJSON), &meta)
+	}
+
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 && text == "" {
 		respondWithError(w, http.StatusBadRequest, "empty_message", "Text or files required")
@@ -395,12 +454,20 @@ func (h *ChatHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var attachments []models.Attachment
-	for _, fh := range files {
+	for i, fh := range files {
 		file, err := fh.Open()
 		if err != nil {
 			log.Printf("Failed to open uploaded file: %v", err)
 			continue
 		}
+		var width *int
+		var height *int
+
+		if i < len(meta) {
+			width = meta[i].Width
+			height = meta[i].Height
+		}
+
 		saved, err := h.storage.Save(file, fh)
 		file.Close()
 		if err != nil {
@@ -416,6 +483,8 @@ func (h *ChatHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 			MimeType:  saved.MimeType,
 			Size:      saved.Size,
 			URL:       saved.URL,
+			Width:     width,
+			Height:    height,
 		}
 		if err := h.db.SaveAttachment(ctx, a); err != nil {
 			log.Printf("Failed to save attachment record: %v", err)

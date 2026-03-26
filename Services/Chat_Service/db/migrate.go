@@ -48,7 +48,9 @@ func (d *Database) Migrate() error {
 			file_name  TEXT    NOT NULL,
 			store_name TEXT    NOT NULL,
 			mime_type  TEXT    NOT NULL,
-			size       BIGINT  NOT NULL
+			size       BIGINT  NOT NULL,
+			width      INTEGER,
+			height     INTEGER
 		);
 
 		CREATE TABLE IF NOT EXISTS forwarded_attachments (

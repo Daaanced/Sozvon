@@ -194,3 +194,71 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 
 	return msg, nil
 }
+
+func (d *Database) GetMessagesAfterID(ctx context.Context, chatID, messageID string, limit int) ([]models.Message, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT
+            m.id, m.chat_id, m.sender_id, m.text,
+            m.reply_to_id, m.edited_at, m.deleted_at, m.created_at,
+            r.id, r.sender_id, r.text,
+            m.forwarded_sender_id, m.forwarded_text, m.forwarded_from_message_id
+        FROM messages m
+        LEFT JOIN messages r ON r.id = m.reply_to_id AND r.deleted_at IS NULL
+        WHERE m.chat_id = $1
+          AND m.created_at > (SELECT created_at FROM messages WHERE id = $2)
+        ORDER BY m.created_at ASC
+        LIMIT $3`,
+		chatID, messageID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages after: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		msg, err := scanMessage(rows)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, msg)
+	}
+	return messages, nil
+}
+
+func (d *Database) GetMessagesBeforeID(ctx context.Context, chatID, messageID string, limit int) ([]models.Message, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT
+            m.id, m.chat_id, m.sender_id, m.text,
+            m.reply_to_id, m.edited_at, m.deleted_at, m.created_at,
+            r.id, r.sender_id, r.text,
+            m.forwarded_sender_id, m.forwarded_text, m.forwarded_from_message_id
+        FROM messages m
+        LEFT JOIN messages r ON r.id = m.reply_to_id AND r.deleted_at IS NULL
+        WHERE m.chat_id = $1
+          AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)
+        ORDER BY m.created_at DESC
+        LIMIT $3`,
+		chatID, messageID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages before: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		msg, err := scanMessage(rows)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, msg)
+	}
+
+	// разворачиваем — читали DESC, отдаём хронологически
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
+	return messages, nil
+}

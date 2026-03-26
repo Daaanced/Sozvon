@@ -6,6 +6,8 @@ export type Attachment = {
   mimeType: string;
   size: number;
   url: string;
+  width?: number;
+  height?: number;
 };
 
 export type ReplyPreview = {
@@ -23,6 +25,7 @@ export type ForwardedMeta = {
 
 export type Message = {
   id: string;
+  chatId: string;
   senderId: number;
   text: string;
   replyToId?: string;
@@ -37,4 +40,6 @@ export type Message = {
 export type PendingFile = {
   file: File;
   previewUrl: string | null;
+  width?: number;
+  height?: number;
 };

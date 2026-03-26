@@ -58,10 +58,13 @@ type Attachment struct {
 	ID        string `json:"id"`
 	MessageID string `json:"messageId"`
 	FileName  string `json:"fileName"`
-	StoreName string `json:"-"` // имя файла на диске, не отдаём клиенту
+	StoreName string `json:"-"`
 	MimeType  string `json:"mimeType"`
 	Size      int64  `json:"size"`
-	URL       string `json:"url"` // заполняется при отдаче, не хранится в БД
+	URL       string `json:"url"`
+
+	Width  *int `json:"width,omitempty"`
+	Height *int `json:"height,omitempty"`
 }
 
 type ForwardedMeta struct {
@@ -161,4 +164,6 @@ type UnreadResult struct {
 	Messages      []Message
 	FirstUnreadID string
 	TotalUnread   int
+	HasMoreBottom bool
+	HasMoreTop    bool
 }

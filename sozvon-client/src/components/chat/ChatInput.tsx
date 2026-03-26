@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect } from "react";
 import { styles } from "./chat.styles";
 import type { Message, PendingFile } from "./chat.types";
+import { getImageDimensions, getVideoDimensions } from "./utils/media";
 
 const MAX_FILES = 4;
 
@@ -35,8 +36,36 @@ export default function ChatInput({
 
   const remaining = MAX_FILES - pendingFiles.length;
 
+  async function createPendingFiles(files: File[]): Promise<PendingFile[]> {
+    return Promise.all(
+      files.map(async (file) => {
+        let width: number | undefined;
+        let height: number | undefined;
+
+        try {
+          if (file.type.startsWith("image/")) {
+            ({ width, height } = await getImageDimensions(file));
+          } else if (file.type.startsWith("video/")) {
+            ({ width, height } = await getVideoDimensions(file));
+          }
+        } catch (e) {
+          console.warn("Failed to get media dimensions", e);
+        }
+
+        return {
+          file,
+          previewUrl: file.type.startsWith("image/")
+            ? URL.createObjectURL(file)
+            : null,
+          width,
+          height,
+        };
+      }),
+    );
+  }
+
   useEffect(() => {
-    const handleDrop = (e: DragEvent) => {
+    const handleDrop = async (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -44,12 +73,8 @@ export default function ChatInput({
       if (files.length === 0 || remaining <= 0) return;
 
       const toAdd = files.slice(0, remaining);
-      const newFiles: PendingFile[] = toAdd.map((file) => ({
-        file,
-        previewUrl: file.type.startsWith("image/")
-          ? URL.createObjectURL(file)
-          : null,
-      }));
+      const newFiles = await createPendingFiles(toAdd);
+
       onFilesAdded(newFiles);
     };
 
@@ -68,7 +93,7 @@ export default function ChatInput({
 
   const textInputRef = useRef<HTMLInputElement>(null);
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
+    async (e: React.ClipboardEvent) => {
       const items = Array.from(e.clipboardData.items);
 
       const fileItems = items.filter(
@@ -79,10 +104,9 @@ export default function ChatInput({
       if (fileItems.length > 0 && remaining > 0) {
         e.preventDefault();
         const toAdd = fileItems.slice(0, remaining);
-        const newFiles: PendingFile[] = toAdd.map((item) => {
-          const file = item.getAsFile()!;
-          return { file, previewUrl: URL.createObjectURL(file) };
-        });
+        const newFiles = await createPendingFiles(
+          toAdd.map((item) => item.getAsFile()!),
+        );
         onFilesAdded(newFiles);
         return;
       }
@@ -101,7 +125,10 @@ export default function ChatInput({
             const file = new File([blob], `gif-${Date.now()}.gif`, {
               type: "image/gif",
             });
-            onFilesAdded([{ file, previewUrl: URL.createObjectURL(file) }]);
+
+            // Заменяем ручное создание объекта на вызов функции обработки
+            const pf = await createPendingFiles([file]);
+            onFilesAdded(pf);
           } catch {
             console.warn("Failed to fetch GIF:", match[1]);
           }
@@ -117,18 +144,12 @@ export default function ChatInput({
     }
   }, [replyTo]);
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
-    if (selected.length === 0) return;
-    if (remaining <= 0) return;
+    if (selected.length === 0 || remaining <= 0) return;
 
     const toAdd = selected.slice(0, remaining);
-    const newFiles: PendingFile[] = toAdd.map((file) => ({
-      file,
-      previewUrl: file.type.startsWith("image/")
-        ? URL.createObjectURL(file)
-        : null,
-    }));
+    const newFiles = await createPendingFiles(toAdd);
 
     onFilesAdded(newFiles);
     e.target.value = "";
@@ -171,7 +192,25 @@ export default function ChatInput({
           {pendingFiles.map((pf, i) => (
             <div key={i} style={styles.pendingItem}>
               {pf.previewUrl ? (
-                <img src={pf.previewUrl} style={styles.pendingPreview} alt="" />
+                <div
+                  style={{
+                    ...styles.pendingPreview, // Сохраняем базовые стили превью, если они есть
+                    aspectRatio:
+                      pf.width && pf.height
+                        ? `${pf.width} / ${pf.height}`
+                        : "1 / 1",
+                  }}
+                >
+                  <img
+                    src={pf.previewUrl}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                    alt=""
+                  />
+                </div>
               ) : (
                 <div style={styles.pendingFileIcon}>📎</div>
               )}
