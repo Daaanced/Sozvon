@@ -33,7 +33,7 @@ export const DELETED_USER: User = {
   name: "Deleted",
   email: "-",
   info: "-",
-  picture: "http://92.127.177.190:8080/static/avatars/deleted.png",
+  picture: "http://92.127.169.188:8080/static/avatars/deleted.png",
   created_at: "-",
   updated_at: "-",
 };

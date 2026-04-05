@@ -1,5 +1,5 @@
 //sozvon-client\src\api\http.ts
-const API_URL = "http://92.127.177.190:8080";
+const API_URL = "http://92.127.169.188:8080";
 
 export async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(API_URL + path, {

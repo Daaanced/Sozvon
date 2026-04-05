@@ -44,6 +44,9 @@ export default function Chat({ chatId }: Props) {
     loadingMoreBottom,
     loadMoreBottom,
     scrollToMessage,
+	jumpToBottom,
+	initialized,
+	clearScrollingToUnread,
   } = useChatMessages(chatId, initChat);
 
   const {
@@ -65,6 +68,7 @@ export default function Chat({ chatId }: Props) {
     uploadProgress,
     handleFilesAdded,
     handleFileRemove,
+	clearFiles,
   } = useFileUpload();
 
   const [text, setText] = useState("");
@@ -83,17 +87,6 @@ export default function Chat({ chatId }: Props) {
       setActiveChat(null);
     };
   }, [chatId]);
-
-  // После загрузки и применения скролла
-  //   useEffect(() => {
-  //   if (scrollIntent !== null) return;
-  //   if (messages.length === 0) return;
-
-  //   // проверяем что сообщения принадлежат текущему чату
-  //   const lastMsg = messages[messages.length - 1];
-  //   console.log(`[Chat][${chatId}] initChat check: lastMsg.chatId=${lastMsg.chatId}`);
-  //   if (!lastMsg.chatId || lastMsg.chatId !== chatId) return; // ← добавить
-  // }, [chatId, scrollIntent]);
 
   // Логируем каждое изменение scrollIntent
   useEffect(() => {
@@ -115,8 +108,16 @@ export default function Chat({ chatId }: Props) {
   }, [messages]);
 
   function handleSend() {
-    send({ text, pendingFiles, replyTo, onClear: () => setText("") });
-  }
+  send({
+    text,
+    pendingFiles,
+    replyTo,
+    onClear: () => {
+      setText("");
+      clearFiles();
+    },
+  });
+}
 
   return (
     <div style={styles.chatWrapper}>
@@ -168,6 +169,9 @@ export default function Chat({ chatId }: Props) {
         hasMoreBottom={hasMoreBottom}
         loadingMoreBottom={loadingMoreBottom}
         onLoadMoreBottom={loadMoreBottom}
+		onJumpToBottom={jumpToBottom}
+		initialized={initialized}
+		onBottomSentinelHidden={clearScrollingToUnread}
       />
 
       <ChatInput

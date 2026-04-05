@@ -2,7 +2,7 @@
 import { requestAuth } from "./http";
 import { PendingFile } from "../components/chat/chat.types";
 
-const API_URL = "http://92.127.177.190:8080";
+const API_URL = "http://92.127.169.188:8080";
 
 export function createChat(toUserId: number) {
   return requestAuth("/chats/create", {

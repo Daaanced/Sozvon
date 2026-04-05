@@ -18,7 +18,7 @@ export function disconnectWS() {
 export function connectWS(token: string) {
   if (socket) return;
 
-  socket = new WebSocket(`ws://92.127.177.190:8080/ws?token=${token}`);
+  socket = new WebSocket(`ws://92.127.169.188:8080/ws?token=${token}`);
 
   socket.onopen = () => {
     console.log("[WS] connected");
