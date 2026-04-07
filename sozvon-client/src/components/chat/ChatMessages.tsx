@@ -93,14 +93,14 @@ export default function ChatMessages({
 
   // 1. Сброс при смене чата
   useEffect(() => {
-  console.log(`[ChatMessages][${chatId}] RESET on chatId change`);
-  messageRefs.current = {};
-  firstUnreadIdRef.current = null;
-  prevMessageCountRef.current = 0;
-  isAtBottomRef.current = true;
-  setShowScrollBtn(false);
-  if (ref.current) ref.current.scrollTop = 0;
-}, [chatId]);
+    console.log(`[ChatMessages][${chatId}] RESET on chatId change`);
+    messageRefs.current = {};
+    firstUnreadIdRef.current = null;
+    prevMessageCountRef.current = 0;
+    isAtBottomRef.current = true;
+    setShowScrollBtn(false);
+    if (ref.current) ref.current.scrollTop = 0;
+  }, [chatId]);
 
   // 2. Применение scroll intent — useLayoutEffect чтобы DOM уже содержал новые сообщения
   useLayoutEffect(() => {
@@ -109,12 +109,12 @@ export default function ChatMessages({
     const el = ref.current;
     if (!el) return;
 
-	prevScrollHeight.current = null;
+    prevScrollHeight.current = null;
 
     if (scrollIntent.type === "bottom") {
       el.scrollTop = el.scrollHeight;
-	  isAtBottomRef.current = true;    
-      setShowScrollBtn(false);           
+      isAtBottomRef.current = true;
+      setShowScrollBtn(false);
       onIntentConsumed();
       return;
     }
@@ -123,26 +123,26 @@ export default function ChatMessages({
     if (!target) return; // сообщение ещё не в DOM — ждём следующего рендера
 
     if (scrollIntent.type === "unread") {
-	target.scrollIntoView({ behavior: "instant", block: "center" });
-	setTimeout(() => {
-		onBottomSentinelHidden();
-		onIntentConsumed();
-		
-		// Принудительно проверяем видимость bottomSentinel
-		const sentinel = bottomSentinelRef.current;
-		const container = ref.current;
-		if (sentinel && container) {
-		const sr = sentinel.getBoundingClientRect();
-		const cr = container.getBoundingClientRect();
-		if (sr.top < cr.bottom && sr.bottom > cr.top) {
-			onLoadMoreBottom();
-		}
-		}
-	}, 300);
-	return;
-	} else if (scrollIntent.type === "message") {
-		target.scrollIntoView({ behavior: "smooth", block: "center" });
-		}
+      target.scrollIntoView({ behavior: "instant", block: "center" });
+      setTimeout(() => {
+        onBottomSentinelHidden();
+        onIntentConsumed();
+
+        // Принудительно проверяем видимость bottomSentinel
+        const sentinel = bottomSentinelRef.current;
+        const container = ref.current;
+        if (sentinel && container) {
+          const sr = sentinel.getBoundingClientRect();
+          const cr = container.getBoundingClientRect();
+          if (sr.top < cr.bottom && sr.bottom > cr.top) {
+            onLoadMoreBottom();
+          }
+        }
+      }, 300);
+      return;
+    } else if (scrollIntent.type === "message") {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
 
     onIntentConsumed();
   }, [scrollIntent, messages]);
@@ -178,26 +178,25 @@ export default function ChatMessages({
     return () => observer.disconnect();
   }, [onLoadMore, hasMore]);
 
-
   useEffect(() => {
     console.log(
       `[ChatMessages][${chatId}] bottomSentinel effect run, hasMoreBottom=${hasMoreBottom}, sentinel=${!!bottomSentinelRef.current}`,
     );
     const sentinel = bottomSentinelRef.current;
     if (!sentinel) return;
-  
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         console.log(
           `[ChatMessages][${chatId}] bottomSentinel intersecting=${entry.isIntersecting}`,
         );
         if (entry.isIntersecting) {
-			onLoadMoreBottom();
-      } 
-	//   else {
-	//   console.log(`[ChatMessages][${chatId}] bottomSentinel hidden → clearScrollingToUnread`);
-    // }
-},
+          onLoadMoreBottom();
+        }
+        //   else {
+        //   console.log(`[ChatMessages][${chatId}] bottomSentinel hidden → clearScrollingToUnread`);
+        // }
+      },
       { threshold: 0.1 },
     );
 
@@ -206,131 +205,139 @@ export default function ChatMessages({
   }, [onLoadMoreBottom, hasMoreBottom]);
 
   useEffect(() => {
-  const el = ref.current;
-  if (!el) return;
+    const el = ref.current;
+    if (!el) return;
 
-  const handleScroll = () => {
-    const threshold = 80;
-    const atBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    const handleScroll = () => {
+      const threshold = 80;
+      const atBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
 
-    isAtBottomRef.current = atBottom;
+      isAtBottomRef.current = atBottom;
 
-    setShowScrollBtn(el.scrollHeight > el.clientHeight && !atBottom);
-  };
+      setShowScrollBtn(el.scrollHeight > el.clientHeight && !atBottom);
+    };
 
-  el.addEventListener("scroll", handleScroll, { passive: true });
-  return () => el.removeEventListener("scroll", handleScroll);
-}, []);
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // 4. Восстановление позиции скролла после подгрузки — useLayoutEffect чтобы не было флика
   useLayoutEffect(() => {
-  const el = ref.current;
-  if (!el) return;
+    const el = ref.current;
+    if (!el) return;
 
-  // Приоритет 1: восстановление позиции после подгрузки вверх
-  if (prevScrollHeight.current !== null) {
-    el.scrollTop = el.scrollHeight - prevScrollHeight.current;
-    prevScrollHeight.current = null;
-    prevMessageCountRef.current = messages.length; // синхронизируем счётчик
-    return;
-  }
+    // Приоритет 1: восстановление позиции после подгрузки вверх
+    if (prevScrollHeight.current !== null) {
+      el.scrollTop = el.scrollHeight - prevScrollHeight.current;
+      prevScrollHeight.current = null;
+      prevMessageCountRef.current = messages.length; // синхронизируем счётчик
+      return;
+    }
 
-  // Приоритет 2: авто-скролл вниз при новых сообщениях
-  const newCount = messages.length;
-  const prevCount = prevMessageCountRef.current;
-  prevMessageCountRef.current = newCount;
+    // Приоритет 2: авто-скролл вниз при новых сообщениях
+    const newCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+    prevMessageCountRef.current = newCount;
 
-  if (newCount > prevCount && prevCount > 0 && isAtBottomRef.current) {
-    el.scrollTop = el.scrollHeight;
-  }
-}, [messages]);
+    if (newCount > prevCount && prevCount > 0 && isAtBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
 
-function handleScrollToMessage(id: string) {
+  function handleScrollToMessage(id: string) {
     onScrollToMessage(id, messageRefs);
   }
   // Вычисляем firstUnreadId из intent один раз, чтобы рендерить разделитель
 
   return (
-    <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-    <div ref={ref} style={styles.messageList}>
-		<div style={{ flex: 1 }} />
-      {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
-      {loadingMore && <div style={styles.loadingMore}>Загрузка...</div>}
+    <div
+      style={{
+        position: "relative",
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}
+    >
+      <div ref={ref} style={styles.messageList}>
+        <div style={{ flex: 1 }} />
+        {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
+        {loadingMore && <div style={styles.loadingMore}>Загрузка...</div>}
 
-      {messages.map((m, index) => {
-        const prev = messages[index - 1];
-        const isGroupStart =
-          !prev ||
-          prev.senderId !== m.senderId ||
-          !isSameDay(prev.createdAt, m.createdAt);
+        {messages.map((m, index) => {
+          const prev = messages[index - 1];
+          const isGroupStart =
+            !prev ||
+            prev.senderId !== m.senderId ||
+            !isSameDay(prev.createdAt, m.createdAt);
 
-        return (
-          <div key={m.id}>
-            {m.id === firstUnreadIdRef.current && (
-              <div style={styles.unreadDivider}>Новые сообщения</div>
-            )}
-            <MessageBubble
-              message={{
-                ...m,
-                replyToMessage: m.replyToId
-                  ? messages.find((x) => x.id === m.replyToId)
-                  : undefined,
-              }}
-              user={getUser(m.senderId)}
-              isGroupStart={isGroupStart}
-              onImageClick={onImageClick}
-              onReply={onReply}
-              onForward={onForward}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              myId={myId}
-              onScrollToMessage={handleScrollToMessage}
-              highlight={m.id === highlightId}
-              setRef={(el) => {
-                const prev = messageRefs.current[m.id];
-                if (prev && prev !== el) unobserveMessage(prev);
-                if (!el && prev) unobserveMessage(prev);
-                messageRefs.current[m.id] = el;
-                if (el) observeMessage(el, m.id, m.createdAt);
-              }}
-              getUser={getUser}
-            />
-          </div>
-        );
-      })}
-      {loadingMoreBottom && <div style={styles.loadingMore}>Загрузка...</div>}
-      {initialized && hasMoreBottom && (
-        <div
-          ref={bottomSentinelRef}
-          style={{ height: 1 }}
-          data-debug="bottom-sentinel"
-        />
+          return (
+            <div key={m.id}>
+              {m.id === firstUnreadIdRef.current && (
+                <div style={styles.unreadDivider}>Новые сообщения</div>
+              )}
+              <MessageBubble
+                message={{
+                  ...m,
+                  replyToMessage: m.replyToId
+                    ? messages.find((x) => x.id === m.replyToId)
+                    : undefined,
+                }}
+                user={getUser(m.senderId)}
+                isGroupStart={isGroupStart}
+                onImageClick={onImageClick}
+                onReply={onReply}
+                onForward={onForward}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                myId={myId}
+                onScrollToMessage={handleScrollToMessage}
+                highlight={m.id === highlightId}
+                setRef={(el) => {
+                  const prev = messageRefs.current[m.id];
+                  if (prev && prev !== el) unobserveMessage(prev);
+                  if (!el && prev) unobserveMessage(prev);
+                  messageRefs.current[m.id] = el;
+                  if (el) observeMessage(el, m.id, m.createdAt);
+                }}
+                getUser={getUser}
+              />
+            </div>
+          );
+        })}
+        {loadingMoreBottom && <div style={styles.loadingMore}>Загрузка...</div>}
+        {initialized && hasMoreBottom && (
+          <div
+            ref={bottomSentinelRef}
+            style={{ height: 1 }}
+            data-debug="bottom-sentinel"
+          />
+        )}
+      </div>
+      {(showScrollBtn || hasMoreBottom) && (
+        <button
+          onClick={onJumpToBottom}
+          style={{
+            position: "absolute",
+            bottom: 16,
+            right: 16,
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            border: "none",
+            background: "#fff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            cursor: "pointer",
+            fontSize: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          ↓
+        </button>
       )}
     </div>
-  {(showScrollBtn || hasMoreBottom) && (
-      <button
-        onClick={onJumpToBottom}
-        style={{
-          position: "absolute",
-          bottom: 16,
-          right: 16,
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          border: "none",
-          background: "#fff",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-          cursor: "pointer",
-          fontSize: 18,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        ↓
-      </button>
-    )}
-  </div>
-);
+  );
 }

@@ -44,14 +44,17 @@ export function useChatMessages(
   const initializedRef = useRef(false);
 
   useEffect(() => {
-  initializedRef.current = initialized;
-}, [initialized]);
+    initializedRef.current = initialized;
+  }, [initialized]);
+
   useEffect(() => {
     hasMoreBottomRef.current = hasMoreBottom;
   }, [hasMoreBottom]);
+
   useEffect(() => {
     loadingMoreBottomRef.current = loadingMoreBottom;
   }, [loadingMoreBottom]);
+
   // Синхронизируем рефы с актуальным стейтом
   useEffect(() => {
     messagesRef.current = messages;
@@ -72,14 +75,14 @@ export function useChatMessages(
     setHighlightId(null);
     setHasMore(true);
     setLoadingMore(false);
-	setInitialized(false);
-	scrollingToUnreadRef.current = false;
+    setInitialized(false);
+    scrollingToUnreadRef.current = false;
     loadingMoreRef.current = false;
     hasMoreRef.current = true;
     loadingMoreBottomRef.current = false;
     hasMoreBottomRef.current = false;
-	pendingBottomRef.current = [];
-	initializedRef.current = false;
+    pendingBottomRef.current = [];
+    initializedRef.current = false;
     let cancelled = false;
 
     (async () => {
@@ -95,13 +98,13 @@ export function useChatMessages(
           setHasMore(unread.hasMoreTop === true);
           setHasMoreBottom(unread.hasMoreBottom === true);
           setScrollIntent({ type: "unread", id: unread.firstUnreadId });
-		  scrollingToUnreadRef.current = true;
-		  
+          scrollingToUnreadRef.current = true;
+
           if (unread.messages.length > 0) {
             const lastMsg = unread.messages[unread.messages.length - 1];
             onInitChat(chatId, new Date(lastMsg.createdAt).getTime());
           }
-		  setInitialized(true);
+          setInitialized(true);
         } else {
           const data = await getMessages(chatId, PAGE_SIZE, 0);
           if (cancelled) return;
@@ -117,7 +120,7 @@ export function useChatMessages(
           msgs.forEach((m) => {
             if (m.forwardedFrom?.senderId) loadUser(m.forwardedFrom.senderId);
           });
-		  setInitialized(true);
+          setInitialized(true);
         }
       } catch (e) {
         console.error(`[useChatMessages][${chatId}] initial load failed:`, e);
@@ -135,75 +138,77 @@ export function useChatMessages(
 
   // Входящие сообщения по WebSocket
   useEffect(() => {
-  return onWSMessage((msg) => {
-    if (msg.event === "message:new" && msg.data.chatId === chatId) {
-      if (msg.data.forwardedFrom?.senderId) {
-        loadUser(msg.data.forwardedFrom.senderId);
-      }
-      markRead(chatId, msg.data.id);
+    return onWSMessage((msg) => {
+      if (msg.event === "message:new" && msg.data.chatId === chatId) {
+        if (msg.data.forwardedFrom?.senderId) {
+          loadUser(msg.data.forwardedFrom.senderId);
+        }
+        markRead(chatId, msg.data.id);
 
-      if (hasMoreBottomRef.current) {
-        // Есть непрогруженные сообщения внизу — буферизуем
-        pendingBottomRef.current = [...pendingBottomRef.current, msg.data];
-      } else {
-        // Находимся на актуальном конце — добавляем сразу
-        setMessages((prev) => [...prev, msg.data]);
+        if (hasMoreBottomRef.current) {
+          // Есть непрогруженные сообщения внизу — буферизуем
+          pendingBottomRef.current = [...pendingBottomRef.current, msg.data];
+        } else {
+          // Находимся на актуальном конце — добавляем сразу
+          setMessages((prev) => [...prev, msg.data]);
+        }
       }
+    });
+  }, [chatId]);
+
+  useEffect(() => {
+    if (hasMoreBottom) return;
+
+    const pending = pendingBottomRef.current;
+    if (pending.length === 0) return;
+    pendingBottomRef.current = [];
+
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id));
+      const fresh = pending.filter((m) => !existingIds.has(m.id));
+      if (fresh.length === 0) return prev;
+      return [...prev, ...fresh].sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+    });
+  }, [hasMoreBottom]);
+
+  const jumpToBottom = useCallback(async () => {
+    if (jumpingToBottomRef.current) return;
+
+    if (!hasMoreBottomRef.current) {
+      setScrollIntent({ type: "bottom" });
+      return;
     }
-  });
-}, [chatId]);
 
-useEffect(() => {
-  if (hasMoreBottom) return;
+    jumpingToBottomRef.current = true;
 
-  const pending = pendingBottomRef.current;
-  if (pending.length === 0) return;
-  pendingBottomRef.current = [];
+    // Сбрасываем буфер входящих
+    pendingBottomRef.current = [];
 
-  setMessages((prev) => {
-    const existingIds = new Set(prev.map((m) => m.id));
-    const fresh = pending.filter((m) => !existingIds.has(m.id));
-    if (fresh.length === 0) return prev;
-    return [...prev, ...fresh].sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-  });
-}, [hasMoreBottom]);
+    try {
+      const data = await getMessages(chatId, PAGE_SIZE, 0);
+      const msgs: Message[] = Array.isArray(data) ? data : [];
 
-const jumpToBottom = useCallback(async () => {
-  if (jumpingToBottomRef.current) return;
-
-  if (!hasMoreBottomRef.current) {
-    setScrollIntent({ type: "bottom" });
-    return;
-  }
-
-  jumpingToBottomRef.current = true;
-
-  // Сбрасываем буфер входящих
-  pendingBottomRef.current = [];
-
-  try {
-    const data = await getMessages(chatId, PAGE_SIZE, 0);
-    const msgs: Message[] = Array.isArray(data) ? data : [];
-
-    setMessages(msgs);
-    setHasMore(msgs.length >= PAGE_SIZE);
-    setHasMoreBottom(false);
-    setScrollIntent({ type: "bottom" });
-  } catch (e) {
-    console.error(`[useChatMessages][${chatId}] jumpToBottom failed:`, e);
-  } finally {
-    jumpingToBottomRef.current = false;
-  }
-}, [chatId]);
+      setMessages(msgs);
+      setHasMore(msgs.length >= PAGE_SIZE);
+      setHasMoreBottom(false);
+      setScrollIntent({ type: "bottom" });
+    } catch (e) {
+      console.error(`[useChatMessages][${chatId}] jumpToBottom failed:`, e);
+    } finally {
+      jumpingToBottomRef.current = false;
+    }
+  }, [chatId]);
 
   const loadMoreBottom = useCallback(async () => {
-	console.log(`[loadMoreBottom] called: loading=${loadingMoreBottomRef.current}, hasMore=${hasMoreBottomRef.current}, scrollingToUnread=${scrollingToUnreadRef.current}`);
+    console.log(
+      `[loadMoreBottom] called: loading=${loadingMoreBottomRef.current}, hasMore=${hasMoreBottomRef.current}, scrollingToUnread=${scrollingToUnreadRef.current}`,
+    );
     if (loadingMoreBottomRef.current || !hasMoreBottomRef.current) return;
-	if (!initializedRef.current) return;
-	if (scrollingToUnreadRef.current) return;
+    if (!initializedRef.current) return;
+    if (scrollingToUnreadRef.current) return;
 
     const msgs = messagesRef.current;
     if (msgs.length === 0) return;
@@ -331,9 +336,9 @@ const jumpToBottom = useCallback(async () => {
   }, []);
 
   const clearScrollingToUnread = useCallback(() => {
-  console.log(`[useChatMessages][${chatId}] clearScrollingToUnread called`);
-  scrollingToUnreadRef.current = false;
-}, [chatId]);
+    console.log(`[useChatMessages][${chatId}] clearScrollingToUnread called`);
+    scrollingToUnreadRef.current = false;
+  }, [chatId]);
 
   return {
     messages,
@@ -348,8 +353,8 @@ const jumpToBottom = useCallback(async () => {
     loadingMoreBottom,
     loadMoreBottom,
     scrollToMessage,
-	jumpToBottom,
-	initialized,
-	clearScrollingToUnread,
+    jumpToBottom,
+    initialized,
+    clearScrollingToUnread,
   };
 }

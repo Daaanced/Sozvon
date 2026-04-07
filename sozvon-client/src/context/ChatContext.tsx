@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { getUserById, searchUser, User } from "../api/users";
 import { onWSMessage } from "../services/ws";
 import { requestAuth } from "../api/http";
+import { getChats } from "../api/chats";
 
 type Chat = {
   chatId: string;
@@ -146,7 +147,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   async function loadChats() {
     try {
-      const data = await requestAuth("/chats");
+      const data = await getChats();
       const safeChats: Chat[] = Array.isArray(data) ? data : [];
       const sorted = sortChats(safeChats);
 

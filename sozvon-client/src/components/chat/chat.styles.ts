@@ -13,14 +13,14 @@ export const styles: Record<string, React.CSSProperties> = {
 
   // Список сообщений
   messageList: {
-	flex: 1,
-	overflowY: "auto",
-	border: "1px solid #ddd",
-	padding: 12,
-	marginBottom: 8,
-	display: "flex",
-	flexDirection: "column",
-},
+    flex: 1,
+    overflowY: "auto",
+    border: "1px solid #ddd",
+    padding: 12,
+    marginBottom: 8,
+    display: "flex",
+    flexDirection: "column",
+  },
 
   // Пузырь
   groupStartWrapper: {

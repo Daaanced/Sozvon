@@ -44,9 +44,9 @@ export default function Chat({ chatId }: Props) {
     loadingMoreBottom,
     loadMoreBottom,
     scrollToMessage,
-	jumpToBottom,
-	initialized,
-	clearScrollingToUnread,
+    jumpToBottom,
+    initialized,
+    clearScrollingToUnread,
   } = useChatMessages(chatId, initChat);
 
   const {
@@ -68,7 +68,7 @@ export default function Chat({ chatId }: Props) {
     uploadProgress,
     handleFilesAdded,
     handleFileRemove,
-	clearFiles,
+    clearFiles,
   } = useFileUpload();
 
   const [text, setText] = useState("");
@@ -108,16 +108,22 @@ export default function Chat({ chatId }: Props) {
   }, [messages]);
 
   function handleSend() {
-  send({
-    text,
-    pendingFiles,
-    replyTo,
-    onClear: () => {
-      setText("");
-      clearFiles();
-    },
-  });
-}
+    send({
+      text,
+      pendingFiles,
+      replyTo,
+      onClear: () => {
+        setText("");
+        clearFiles();
+      },
+    });
+
+    if (hasMoreBottom) {
+      setTimeout(() => jumpToBottom(), 300); // даём WS время вернуть новое сообщение
+    } else {
+      jumpToBottom();
+    }
+  }
 
   return (
     <div style={styles.chatWrapper}>
@@ -169,9 +175,9 @@ export default function Chat({ chatId }: Props) {
         hasMoreBottom={hasMoreBottom}
         loadingMoreBottom={loadingMoreBottom}
         onLoadMoreBottom={loadMoreBottom}
-		onJumpToBottom={jumpToBottom}
-		initialized={initialized}
-		onBottomSentinelHidden={clearScrollingToUnread}
+        onJumpToBottom={jumpToBottom}
+        initialized={initialized}
+        onBottomSentinelHidden={clearScrollingToUnread}
       />
 
       <ChatInput
