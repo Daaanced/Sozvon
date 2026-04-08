@@ -2,8 +2,7 @@
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { getUserById, searchUser, User } from "../api/users";
 import { onWSMessage } from "../services/ws";
-import { requestAuth } from "../api/http";
-import { getChats } from "../api/chats";
+import { getChats, markRead } from "../api/chats";
 
 type Chat = {
   chatId: string;
@@ -22,7 +21,7 @@ type ChatContextType = {
   me: User | null;
   unread: Record<string, boolean>;
   loadUser: (id: number) => void;
-  markRead: (chatId: string, lastMessageId?: string) => void;
+  handleMarkRead: (chatId: string, lastMessageId?: string) => void;
   notifyOwnMessage: (chatId: string, createdAt: string) => void;
   getSafeUser: (id: number) => User;
   setActiveChat: (chatId: string | null) => void;
@@ -96,7 +95,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return users[id] ?? DELETED_USER;
   }
 
-  async function markRead(chatId: string, lastMessageId?: string) {
+  async function handleMarkRead(chatId: string, lastMessageId?: string) {
     locallyReadRef.current.add(chatId);
 
     setUnread((prev) => ({ ...prev, [chatId]: false }));
@@ -104,10 +103,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (!lastMessageId) return;
 
     try {
-      await requestAuth(`/chats/${chatId}/read`, {
-        method: "POST",
-        body: JSON.stringify({ lastMessageId }),
-      });
+      await markRead(chatId, lastMessageId);
     } catch (e) {
       console.error("markRead failed:", e);
     }
@@ -269,7 +265,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         myLogin,
         me,
         unread,
-        markRead,
+        handleMarkRead,
         notifyOwnMessage,
         getSafeUser,
         setActiveChat,

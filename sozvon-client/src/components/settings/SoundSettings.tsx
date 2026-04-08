@@ -1,3 +1,4 @@
+//sozvon-client\src\components\settings\SoundSettings.tsx
 export default function SoundSettings() {
   return (
     <>

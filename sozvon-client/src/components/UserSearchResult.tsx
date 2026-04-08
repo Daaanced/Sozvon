@@ -47,7 +47,7 @@ export default function UserSearchResult({
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src =
-              "http://176.51.123.160:8080/static/avatars/default.png";
+              "http://92.127.169.188:8080/static/avatars/default.png";
           }}
         />
       </div>

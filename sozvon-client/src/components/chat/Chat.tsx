@@ -18,7 +18,7 @@ import { Message } from "./chat.types";
 type Props = { chatId: string };
 
 export default function Chat({ chatId }: Props) {
-  const { getSafeUser, chats, myId, markRead, setActiveChat } =
+  const { getSafeUser, chats, myId, handleMarkRead, setActiveChat } =
     useChatContext();
 
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export default function Chat({ chatId }: Props) {
 
   const { observe, unobserve, flush, reset, initChat, setActiveChatId } =
     useVisibleMessages((id) => {
-      markRead(chatId, id);
+      handleMarkRead(chatId, id);
     });
 
   const {
@@ -99,6 +99,7 @@ export default function Chat({ chatId }: Props) {
   // Логируем изменение messages
   useEffect(() => {
     if (messages.length === 0) return;
+    //первое и последнее загруженное сообщение
     const first = messages[0];
     const last = messages[messages.length - 1];
     console.log(

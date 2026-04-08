@@ -12,7 +12,7 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
   const elementsRef = useRef<Set<HTMLElement>>(new Set());
   const visibleIdsRef = useRef<Set<string>>(new Set());
   const onMarkReadRef = useRef(onMarkRead);
-  const maxReadTimeRef = useRef<Map<string, number>>(new Map());
+  const maxReadTimeRef = useRef<Map<string, MessageMeta>>(new Map());
   const activeChatIdRef = useRef<string>("");
 
   const setActiveChatId = useCallback((id: string) => {
@@ -60,11 +60,10 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
       const chatId = activeChatIdRef.current;
       if (!chatId) return;
 
-      const prevMax = maxReadTimeRef.current.get(chatId) ?? 0;
+      const prev = maxReadTimeRef.current.get(chatId);
 
-      if (best.time > prevMax) {
-        maxReadTimeRef.current.set(chatId, best.time);
-        onMarkReadRef.current(best.id);
+      if (!prev || best.time > prev.time) {
+        maxReadTimeRef.current.set(chatId, best);
       }
     },
     [],
@@ -86,51 +85,20 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
     console.log(
       `[flush] elementsRef.size=${elementsRef.current.size}, visibleIds.size=${visibleIdsRef.current.size}`,
     );
-    const visibleIds = Array.from(visibleIdsRef.current);
-    const allElements = Array.from(elementsRef.current);
 
-    let bestVisible: MessageMeta | null = null;
+    const best = maxReadTimeRef.current.get(chatId);
 
-    if (visibleIds.length === 0) {
-      const last = allElements[allElements.length - 1];
-      if (last?.dataset.messageId) {
-        bestVisible = {
-          id: last.dataset.messageId,
-          time: Number(last.dataset.messageTime),
-        };
-      }
-    } else {
-      for (const id of visibleIds) {
-        const el = allElements.find((e) => e.dataset.messageId === id);
-        if (!el) continue;
-        const time = Number(el.dataset.messageTime);
-        if (Number.isNaN(time)) continue;
-        if (!bestVisible || time > bestVisible.time) {
-          bestVisible = { id, time };
-        }
-      }
+    if (!best) {
+      console.log(
+        `[useVisibleMessages] flush chatId=${chatId}: nothing seen, skipping`,
+      );
+      return;
     }
-
-    if (!bestVisible) return;
-
-    const prevMax = maxReadTimeRef.current.get(chatId) ?? 0;
 
     console.log(
-      `[useVisibleMessages] flush chatId=${chatId}: bestVisible=${new Date(bestVisible.time).toISOString()}, prevMax=${prevMax ? new Date(prevMax).toISOString() : "none"}`,
+      `[useVisibleMessages] flush chatId=${chatId}: sending read to id="${best.id}" time=${new Date(best.time).toISOString()}`,
     );
-
-    // Отправляем только если новая позиция НОВЕЕ сохранённой
-    if (bestVisible.time > prevMax) {
-      maxReadTimeRef.current.set(chatId, bestVisible.time);
-      console.log(
-        `[useVisibleMessages] flush: advancing read to id="${bestVisible.id}"`,
-      );
-      onMarkReadRef.current(bestVisible.id);
-    } else {
-      console.log(
-        `[useVisibleMessages] flush: skipping — user scrolled up, keeping max position`,
-      );
-    }
+    onMarkReadRef.current(best.id);
   }, []);
 
   useEffect(() => {
@@ -175,14 +143,11 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
     createObserver();
   }, [createObserver]);
 
-  const initChat = useCallback((chatId: string, time: number) => {
-    const current = maxReadTimeRef.current.get(chatId) ?? 0;
-    if (time > current) {
-      console.log(
-        `[useVisibleMessages] initChat: setting maxReadTime for ${chatId} to ${new Date(time).toISOString()}`,
-      );
-      maxReadTimeRef.current.set(chatId, time);
-    }
+  const initChat = useCallback((chatId: string) => {
+    maxReadTimeRef.current.delete(chatId);
+    console.log(
+      `[useVisibleMessages] initChat: reset maxReadTime for ${chatId}`,
+    );
   }, []);
 
   return { observe, unobserve, flush, reset, initChat, setActiveChatId };

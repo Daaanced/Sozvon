@@ -249,6 +249,7 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, messages)
 }
 
+// метод для загрузки на отвеченное сообщение
 func (h *ChatHandler) GetMessagesContext(w http.ResponseWriter, r *http.Request) {
 	chatID := mux.Vars(r)["chatId"]
 	messageID := mux.Vars(r)["messageId"]

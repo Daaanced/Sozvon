@@ -1,3 +1,4 @@
+//sozvon-client\src\components\settings\AppearanceSettings.tsx
 export default function AppearanceSettings() {
   return (
     <>
