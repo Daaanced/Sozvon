@@ -106,35 +106,36 @@ func (d *Database) ChatExists(ctx context.Context, chatID string) (bool, error) 
 func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatListItem, error) {
 	query := `
 		SELECT
-			c.id,
-			c.type,
-			COALESCE(c.name, '') AS name,
-			array_agg(cm2.user_id) AS members,
-			COALESCE(m.text, '') AS last_message,
-			COALESCE(m.created_at, c.created_at) AS updated_at,
-			COALESCE((
-				SELECT COUNT(*) FROM messages unread
-				WHERE unread.chat_id = c.id
-				  AND unread.sender_id != $1
-				  AND unread.deleted_at IS NULL
-				  AND (
-					cm_me.last_read_message_id IS NULL
-					OR unread.created_at > (
-						SELECT created_at FROM messages
-						WHERE id = cm_me.last_read_message_id
-					)
-				  )
-			), 0) AS unread_count
+		c.id,
+		c.type,
+		COALESCE(c.name, '') AS name,
+		array_agg(cm2.user_id) AS members,
+		m.id AS last_message_id,
+		cm_me.last_read_message_id,
+		COALESCE(m.created_at, c.created_at) AS updated_at,
+		COALESCE((
+			SELECT COUNT(*) FROM messages unread
+			WHERE unread.chat_id = c.id
+			AND unread.sender_id != $1
+			AND unread.deleted_at IS NULL
+			AND (
+				cm_me.last_read_message_id IS NULL
+				OR unread.created_at > (
+					SELECT created_at FROM messages
+					WHERE id = cm_me.last_read_message_id
+				)
+			)
+		), 0) AS unread_count	
 		FROM chats c
 		JOIN chat_members cm_me ON cm_me.chat_id = c.id AND cm_me.user_id = $1
 		JOIN chat_members cm2   ON cm2.chat_id = c.id
 		LEFT JOIN LATERAL (
-			SELECT text, created_at FROM messages
-			WHERE chat_id = c.id AND deleted_at IS NULL
-			ORDER BY created_at DESC LIMIT 1
+		SELECT id, created_at FROM messages
+		WHERE chat_id = c.id AND deleted_at IS NULL
+		ORDER BY created_at DESC LIMIT 1
 		) m ON true
 		WHERE c.active = true
-		GROUP BY c.id, c.type, c.name, m.text, m.created_at, c.created_at, cm_me.last_read_message_id
+		GROUP BY c.id, c.type, c.name, m.id, m.created_at, c.created_at, cm_me.last_read_message_id
 		ORDER BY COALESCE(m.created_at, c.created_at) DESC
 	`
 
@@ -149,16 +150,20 @@ func (d *Database) GetUserChats(ctx context.Context, userID int) ([]models.ChatL
 	for rows.Next() {
 		var item models.ChatListItem
 		var members pqIntArray
+		var lastMessageID *string
+		var lastReadMessageID *string
 
 		if err := rows.Scan(
 			&item.ChatID, &item.Type, &item.Name,
 			&members,
-			&item.LastMessage, &updatedAt, &item.UnreadCount,
+			&lastMessageID, &lastReadMessageID, &updatedAt, &item.UnreadCount,
 		); err != nil {
 			log.Printf("scan chat error: %v", err)
 			return nil, fmt.Errorf("failed to scan chat: %w", err)
 		}
 
+		item.LastMessageID = lastMessageID
+		item.LastReadMessageID = lastReadMessageID
 		item.UpdatedAt = models.UTCTime{Time: updatedAt.UTC()}
 		item.Members = []int(members)
 		chats = append(chats, item)

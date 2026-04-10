@@ -26,10 +26,10 @@ export default function Chat({ chatId }: Props) {
     null,
   );
 
-  const { observe, unobserve, flush, reset, initChat, setActiveChatId } =
-    useVisibleMessages((id) => {
-      handleMarkRead(chatId, id);
-    });
+  const { observe, unobserve, flush, reset } =
+	useVisibleMessages((id) => {
+		handleMarkRead(chatId, id);
+	});
 
   const {
     messages,
@@ -47,7 +47,7 @@ export default function Chat({ chatId }: Props) {
     jumpToBottom,
     initialized,
     clearScrollingToUnread,
-  } = useChatMessages(chatId, initChat);
+  } = useChatMessages(chatId);
 
   const {
     replyTo,
@@ -80,10 +80,9 @@ export default function Chat({ chatId }: Props) {
   useEffect(() => {
     reset();
     setActiveChat(chatId);
-    setActiveChatId(chatId);
 
     return () => {
-      flush(chatId);
+      flush();
       setActiveChat(null);
     };
   }, [chatId]);

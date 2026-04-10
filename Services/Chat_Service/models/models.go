@@ -26,13 +26,14 @@ type Chat struct {
 }
 
 type ChatListItem struct {
-	ChatID      string  `json:"chatId"`
-	Type        string  `json:"type"`
-	Name        string  `json:"name,omitempty"`
-	Members     []int   `json:"members"`
-	LastMessage string  `json:"lastMessage"`
-	UpdatedAt   UTCTime `json:"updatedAt"`
-	UnreadCount int     `json:"unreadCount"`
+	ChatID            string  `json:"chatId"`
+	Type              string  `json:"type"`
+	Name              string  `json:"name,omitempty"`
+	Members           []int   `json:"members"`
+	LastMessageID     *string `json:"lastMessageId"`
+	LastReadMessageID *string `json:"lastReadMessageId"`
+	UpdatedAt         UTCTime `json:"updatedAt"`
+	UnreadCount       int     `json:"unreadCount"`
 }
 
 type UTCTime struct {

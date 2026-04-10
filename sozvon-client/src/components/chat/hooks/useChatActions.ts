@@ -101,7 +101,7 @@ export function useChatActions(
         }
 
         setMessages((prev) => [...prev, msg]);
-        notifyOwnMessage(chatId, msg.createdAt);
+        notifyOwnMessage(chatId, msg.createdAt, msg.id);
         setReplyTo(null);
       } catch (e) {
         console.error("Send failed:", e);

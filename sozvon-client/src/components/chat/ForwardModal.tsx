@@ -28,7 +28,7 @@ export default function ForwardModal({ message, onClose }: Props) {
       const msgs = Array.isArray(result) ? result : [];
       if (msgs.length > 0) {
         const lastMsg = msgs[msgs.length - 1];
-        notifyOwnMessage(selectedChatId, lastMsg.createdAt);
+        notifyOwnMessage(selectedChatId, lastMsg.createdAt, lastMsg.id);
       }
       onClose();
     } catch (e) {

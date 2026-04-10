@@ -22,9 +22,8 @@ export type ScrollIntent =
 
 export function useChatMessages(
   chatId: string,
-  onInitChat: (chatId: string) => void,
 ) {
-  const { handleMarkRead, loadUser } = useChatContext();
+  const { loadUser } = useChatContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [scrollIntent, setScrollIntent] = useState<ScrollIntent>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -103,7 +102,6 @@ export function useChatMessages(
           if (unread.messages.length > 0) {
             // последнее прогруженное сообщение
             //const lastMsg = unread.messages[unread.messages.length - 1];
-            onInitChat(chatId);
           }
           setInitialized(true);
         } else {
@@ -116,7 +114,6 @@ export function useChatMessages(
 
           if (msgs.length > 0) {
             //const lastMsg = msgs[msgs.length - 1];
-            onInitChat(chatId);
           }
           msgs.forEach((m) => {
             if (m.forwardedFrom?.senderId) loadUser(m.forwardedFrom.senderId);
@@ -144,7 +141,7 @@ export function useChatMessages(
         if (msg.data.forwardedFrom?.senderId) {
           loadUser(msg.data.forwardedFrom.senderId);
         }
-        handleMarkRead(chatId, msg.data.id);
+        //handleMarkRead(chatId, msg.data.id);
 
         if (hasMoreBottomRef.current) {
           // Есть непрогруженные сообщения внизу — буферизуем

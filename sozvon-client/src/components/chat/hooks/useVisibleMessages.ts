@@ -2,72 +2,45 @@
 
 import { useRef, useEffect, useCallback } from "react";
 
-type MessageMeta = {
-  id: string;
-  time: number;
-};
-
 export function useVisibleMessages(onMarkRead: (id: string) => void) {
+
   const observerRef = useRef<IntersectionObserver | null>(null);
   const elementsRef = useRef<Set<HTMLElement>>(new Set());
   const visibleIdsRef = useRef<Set<string>>(new Set());
   const onMarkReadRef = useRef(onMarkRead);
-  const maxReadTimeRef = useRef<Map<string, MessageMeta>>(new Map());
-  const activeChatIdRef = useRef<string>("");
-
-  const setActiveChatId = useCallback((id: string) => {
-    activeChatIdRef.current = id;
-  }, []);
+  const maxReadRef = useRef<{ id: string; time: number } | null>(null);
 
   useEffect(() => {
     onMarkReadRef.current = onMarkRead;
   }, [onMarkRead]);
 
-  const handleIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      for (const entry of entries) {
-        const el = entry.target as HTMLElement;
-        const id = el.dataset.messageId;
+  const handleIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
+  for (const entry of entries) {
+    const el = entry.target as HTMLElement;
+    const id = el.dataset.messageId;
+    if (!id) continue;
 
-        if (!id) continue;
+    if (entry.isIntersecting) {
+      visibleIdsRef.current.add(id);
+    } else {
+      visibleIdsRef.current.delete(id);
+    }
+  }
 
-        if (entry.isIntersecting) {
-          visibleIdsRef.current.add(id);
-        } else {
-          visibleIdsRef.current.delete(id);
-        }
-      }
+  // Обновляем максимум среди текущих видимых
+  const allElements = Array.from(elementsRef.current);
+  for (const id of visibleIdsRef.current) {
+    const el = allElements.find((e) => e.dataset.messageId === id);
+    if (!el) continue;
+    const time = Number(el.dataset.messageTime);
+    if (Number.isNaN(time)) continue;
 
-      // 👉 realtime markRead
-      const allElements = Array.from(elementsRef.current);
-
-      let best: MessageMeta | null = null;
-
-      for (const id of visibleIdsRef.current) {
-        const el = allElements.find((e) => e.dataset.messageId === id);
-        if (!el) continue;
-
-        const time = Number(el.dataset.messageTime);
-        if (Number.isNaN(time)) continue;
-
-        if (!best || time > best.time) {
-          best = { id, time };
-        }
-      }
-
-      if (!best) return;
-
-      const chatId = activeChatIdRef.current;
-      if (!chatId) return;
-
-      const prev = maxReadTimeRef.current.get(chatId);
-
-      if (!prev || best.time > prev.time) {
-        maxReadTimeRef.current.set(chatId, best);
-      }
-    },
-    [],
-  );
+    // Накапливаем максимум за всё время — не сбрасываем при скролле вверх
+    if (!maxReadRef.current || time > maxReadRef.current.time) {
+      maxReadRef.current = { id, time };
+    }
+  }
+}, []);
 
   const createObserver = useCallback(() => {
     observerRef.current?.disconnect();
@@ -81,25 +54,12 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
     });
   }, [handleIntersect]);
 
-  const flush = useCallback((chatId: string) => {
-    console.log(
-      `[flush] elementsRef.size=${elementsRef.current.size}, visibleIds.size=${visibleIdsRef.current.size}`,
-    );
-
-    const best = maxReadTimeRef.current.get(chatId);
-
-    if (!best) {
-      console.log(
-        `[useVisibleMessages] flush chatId=${chatId}: nothing seen, skipping`,
-      );
-      return;
-    }
-
-    console.log(
-      `[useVisibleMessages] flush chatId=${chatId}: sending read to id="${best.id}" time=${new Date(best.time).toISOString()}`,
-    );
-    onMarkReadRef.current(best.id);
-  }, []);
+	const flush = useCallback(() => {
+		// Берём накопленный максимум, а не текущие видимые
+		const best = maxReadRef.current;
+		if (!best) return;
+		onMarkReadRef.current(best.id);
+	}, []);
 
   useEffect(() => {
     createObserver();
@@ -137,18 +97,12 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
   }, []);
 
   const reset = useCallback(() => {
-    visibleIdsRef.current.clear();
-    elementsRef.current.clear();
-    observerRef.current?.disconnect();
-    createObserver();
-  }, [createObserver]);
+	visibleIdsRef.current.clear();
+	elementsRef.current.clear();
+	maxReadRef.current = null; // ← сброс при смене чата
+	observerRef.current?.disconnect();
+	createObserver();
+	}, [createObserver]);
 
-  const initChat = useCallback((chatId: string) => {
-    maxReadTimeRef.current.delete(chatId);
-    console.log(
-      `[useVisibleMessages] initChat: reset maxReadTime for ${chatId}`,
-    );
-  }, []);
-
-  return { observe, unobserve, flush, reset, initChat, setActiveChatId };
+  return { observe, unobserve, flush, reset };
 }
