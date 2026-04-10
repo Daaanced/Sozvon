@@ -3,7 +3,6 @@
 import { useRef, useEffect, useCallback } from "react";
 
 export function useVisibleMessages(onMarkRead: (id: string) => void) {
-
   const observerRef = useRef<IntersectionObserver | null>(null);
   const elementsRef = useRef<Set<HTMLElement>>(new Set());
   const visibleIdsRef = useRef<Set<string>>(new Set());
@@ -14,33 +13,36 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
     onMarkReadRef.current = onMarkRead;
   }, [onMarkRead]);
 
-  const handleIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
-  for (const entry of entries) {
-    const el = entry.target as HTMLElement;
-    const id = el.dataset.messageId;
-    if (!id) continue;
+  const handleIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      for (const entry of entries) {
+        const el = entry.target as HTMLElement;
+        const id = el.dataset.messageId;
+        if (!id) continue;
 
-    if (entry.isIntersecting) {
-      visibleIdsRef.current.add(id);
-    } else {
-      visibleIdsRef.current.delete(id);
-    }
-  }
+        if (entry.isIntersecting) {
+          visibleIdsRef.current.add(id);
+        } else {
+          visibleIdsRef.current.delete(id);
+        }
+      }
 
-  // Обновляем максимум среди текущих видимых
-  const allElements = Array.from(elementsRef.current);
-  for (const id of visibleIdsRef.current) {
-    const el = allElements.find((e) => e.dataset.messageId === id);
-    if (!el) continue;
-    const time = Number(el.dataset.messageTime);
-    if (Number.isNaN(time)) continue;
+      // Обновляем максимум среди текущих видимых
+      const allElements = Array.from(elementsRef.current);
+      for (const id of visibleIdsRef.current) {
+        const el = allElements.find((e) => e.dataset.messageId === id);
+        if (!el) continue;
+        const time = Number(el.dataset.messageTime);
+        if (Number.isNaN(time)) continue;
 
-    // Накапливаем максимум за всё время — не сбрасываем при скролле вверх
-    if (!maxReadRef.current || time > maxReadRef.current.time) {
-      maxReadRef.current = { id, time };
-    }
-  }
-}, []);
+        // Накапливаем максимум за всё время — не сбрасываем при скролле вверх
+        if (!maxReadRef.current || time > maxReadRef.current.time) {
+          maxReadRef.current = { id, time };
+        }
+      }
+    },
+    [],
+  );
 
   const createObserver = useCallback(() => {
     observerRef.current?.disconnect();
@@ -54,12 +56,12 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
     });
   }, [handleIntersect]);
 
-	const flush = useCallback(() => {
-		// Берём накопленный максимум, а не текущие видимые
-		const best = maxReadRef.current;
-		if (!best) return;
-		onMarkReadRef.current(best.id);
-	}, []);
+  const flush = useCallback(() => {
+    // Берём накопленный максимум, а не текущие видимые
+    const best = maxReadRef.current;
+    if (!best) return;
+    onMarkReadRef.current(best.id);
+  }, []);
 
   useEffect(() => {
     createObserver();
@@ -97,12 +99,12 @@ export function useVisibleMessages(onMarkRead: (id: string) => void) {
   }, []);
 
   const reset = useCallback(() => {
-	visibleIdsRef.current.clear();
-	elementsRef.current.clear();
-	maxReadRef.current = null; // ← сброс при смене чата
-	observerRef.current?.disconnect();
-	createObserver();
-	}, [createObserver]);
+    visibleIdsRef.current.clear();
+    elementsRef.current.clear();
+    maxReadRef.current = null; // ← сброс при смене чата
+    observerRef.current?.disconnect();
+    createObserver();
+  }, [createObserver]);
 
   return { observe, unobserve, flush, reset };
 }

@@ -580,4 +580,21 @@ export const styles: Record<string, React.CSSProperties> = {
     borderTop: "1px solid #e0e0e0",
     position: "relative" as const,
   },
+
+  scrollToBottomBtn: {
+    position: "absolute" as const,
+    bottom: 16,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    border: "none",
+    background: "#fff",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+    cursor: "pointer",
+    fontSize: 18,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 };

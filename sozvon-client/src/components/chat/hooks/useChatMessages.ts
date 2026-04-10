@@ -20,9 +20,7 @@ export type ScrollIntent =
   | { type: "message"; id: string }
   | null;
 
-export function useChatMessages(
-  chatId: string,
-) {
+export function useChatMessages(chatId: string) {
   const { loadUser } = useChatContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [scrollIntent, setScrollIntent] = useState<ScrollIntent>(null);

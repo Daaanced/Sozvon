@@ -316,25 +316,7 @@ export default function ChatMessages({
         )}
       </div>
       {(showScrollBtn || hasMoreBottom) && (
-        <button
-          onClick={onJumpToBottom}
-          style={{
-            position: "absolute",
-            bottom: 16,
-            right: 16,
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            border: "none",
-            background: "#fff",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-            cursor: "pointer",
-            fontSize: 18,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+        <button onClick={onJumpToBottom} style={styles.scrollToBottomBtn}>
           ↓
         </button>
       )}

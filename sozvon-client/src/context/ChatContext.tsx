@@ -93,79 +93,83 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const chatsRef = useRef<Chat[]>([]);
 
   function setActiveChat(chatId: string | null) {
-	const prev = activeChatRef.current;
-	activeChatRef.current = chatId;
+    const prev = activeChatRef.current;
+    activeChatRef.current = chatId;
 
-	// При уходе из чата — пересчитываем unread для предыдущего
-	if (prev && prev !== chatId) {
-		recheckUnread(prev);
-	}
+    // При уходе из чата — пересчитываем unread для предыдущего
+    if (prev && prev !== chatId) {
+      recheckUnread(prev);
+    }
 
-	if (!chatId) return;
-	setUnread((prev) => ({ ...prev, [chatId]: false }));
-	}
+    if (!chatId) return;
+    setUnread((prev) => ({ ...prev, [chatId]: false }));
+  }
 
   function getSafeUser(id: number): User {
     if (id === myId) return me ?? DELETED_USER;
     return users[id] ?? DELETED_USER;
   }
 
-	function recheckUnread(chatId: string) {
-		const chat = chatsRef.current.find((c) => c.chatId === chatId);
-		if (!chat?.lastMessageId) return;
+  function recheckUnread(chatId: string) {
+    const chat = chatsRef.current.find((c) => c.chatId === chatId);
+    if (!chat?.lastMessageId) return;
 
-		const isRead = chat.lastReadMessageId === chat.lastMessageId;
-		setUnread((prev) => ({ ...prev, [chatId]: !isRead }));
-	}
+    const isRead = chat.lastReadMessageId === chat.lastMessageId;
+    setUnread((prev) => ({ ...prev, [chatId]: !isRead }));
+  }
 
-	async function handleMarkRead(chatId: string, lastMessageId?: string) {
-	if (lastMessageId) {
-		// Обновляем lastReadMessageId в локальном state чата
-		setChats((prev) => {
-		const next = prev.map((c) =>
-			c.chatId === chatId
-			? { ...c, lastReadMessageId: lastMessageId }
-			: c
-		);
-		chatsRef.current = next;
-		return next;
-		});
-	}
+  async function handleMarkRead(chatId: string, lastMessageId?: string) {
+    if (lastMessageId) {
+      // Обновляем lastReadMessageId в локальном state чата
+      setChats((prev) => {
+        const next = prev.map((c) =>
+          c.chatId === chatId ? { ...c, lastReadMessageId: lastMessageId } : c,
+        );
+        chatsRef.current = next;
+        return next;
+      });
+    }
 
-	if (chatId === activeChatRef.current) {
-		setUnread((prev) => ({ ...prev, [chatId]: false }));
-	} else {
-		recheckUnread(chatId);
-	}
+    if (chatId === activeChatRef.current) {
+      setUnread((prev) => ({ ...prev, [chatId]: false }));
+    } else {
+      recheckUnread(chatId);
+    }
 
-	if (!lastMessageId) return;
-	try {
-		await markRead(chatId, lastMessageId);
-	} catch (e) {
-		console.error("markRead failed:", e);
-	}
-	}
+    if (!lastMessageId) return;
+    try {
+      await markRead(chatId, lastMessageId);
+    } catch (e) {
+      console.error("markRead failed:", e);
+    }
+  }
 
-  function notifyOwnMessage(chatId: string, createdAt: string, messageId?: string) {
-	setChats((prev) => {
-		const index = prev.findIndex((c) => c.chatId === chatId);
-		if (index === -1) return prev;
+  function notifyOwnMessage(
+    chatId: string,
+    createdAt: string,
+    messageId?: string,
+  ) {
+    setChats((prev) => {
+      const index = prev.findIndex((c) => c.chatId === chatId);
+      if (index === -1) return prev;
 
-		const chat = prev[index];
-		const updatedChat = {
-		...chat,
-		updatedAt: createdAt,
-		...(messageId ? { lastMessageId: messageId, lastReadMessageId: messageId } : {}),
-		};
-		const next = [...prev];
-		next.splice(index, 1);
-		next.unshift(updatedChat);
-		chatsRef.current = next;
-		return next;
-	});
+      const chat = prev[index];
+      const updatedChat = {
+        ...chat,
+        updatedAt: createdAt,
+        ...(messageId
+          ? { lastMessageId: messageId, lastReadMessageId: messageId }
+          : {}),
+      };
+      const next = [...prev];
+      next.splice(index, 1);
+      next.unshift(updatedChat);
+      chatsRef.current = next;
+      return next;
+    });
 
-	setUnread((prev) => ({ ...prev, [chatId]: false }));
-	}
+    setUnread((prev) => ({ ...prev, [chatId]: false }));
+  }
 
   function loadUserById(id: number) {
     if (id === myId) return;
@@ -211,20 +215,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       });
 
       setUnread((prev) => {
-		const next = { ...prev };
-		sorted.forEach((chat: any) => {
-			if (chat.chatId === activeChatRef.current) return; // открытый чат — не трогаем
+        const next = { ...prev };
+        sorted.forEach((chat: any) => {
+          if (chat.chatId === activeChatRef.current) return; // открытый чат — не трогаем
 
-			const isRead =
-			!chat.lastMessageId ||
-			chat.lastReadMessageId === chat.lastMessageId;
+          const isRead =
+            !chat.lastMessageId ||
+            chat.lastReadMessageId === chat.lastMessageId;
 
-			if (!isRead) {
-			next[chat.chatId] = true;
-			}
-		});
-		return next;
-		});
+          if (!isRead) {
+            next[chat.chatId] = true;
+          }
+        });
+        return next;
+      });
 
       sorted.forEach((chat) => {
         chat.members.filter((id: number) => id !== myId).forEach(loadUserById);
@@ -254,39 +258,42 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (msg.event === "message:new") {
-		const chatId: string | undefined = msg.data?.chatId;
-		const senderId: number | undefined = msg.data?.senderId;
-		if (!chatId) return;
-		if (senderId === myId) return;
+        const chatId: string | undefined = msg.data?.chatId;
+        const senderId: number | undefined = msg.data?.senderId;
+        if (!chatId) return;
+        if (senderId === myId) return;
 
-		const messageId: string | undefined = msg.data?.messageId ?? msg.data?.id;
+        const messageId: string | undefined =
+          msg.data?.messageId ?? msg.data?.id;
 
-		setChats((prev) => {
-			const index = prev.findIndex((c) => c.chatId === chatId);
-			if (index === -1) return prev;
-			const chat = prev[index];
-			const now = msg.data.createdAt ?? new Date().toISOString();
-			const prevTime = chat.updatedAt ? new Date(chat.updatedAt).getTime() : 0;
-			const newTime = new Date(now).getTime();
-			if (newTime < prevTime) return prev;
+        setChats((prev) => {
+          const index = prev.findIndex((c) => c.chatId === chatId);
+          if (index === -1) return prev;
+          const chat = prev[index];
+          const now = msg.data.createdAt ?? new Date().toISOString();
+          const prevTime = chat.updatedAt
+            ? new Date(chat.updatedAt).getTime()
+            : 0;
+          const newTime = new Date(now).getTime();
+          if (newTime < prevTime) return prev;
 
-			const updatedChat = {
-			...chat,
-			updatedAt: now,
-			...(messageId ? { lastMessageId: messageId } : {}),
-			// lastReadMessageId НЕ меняем — чужое сообщение мы не читали
-			};
-			const next = [...prev];
-			next.splice(index, 1);
-			next.unshift(updatedChat);
-			chatsRef.current = next;
-			return next;
-		});
+          const updatedChat = {
+            ...chat,
+            updatedAt: now,
+            ...(messageId ? { lastMessageId: messageId } : {}),
+            // lastReadMessageId НЕ меняем — чужое сообщение мы не читали
+          };
+          const next = [...prev];
+          next.splice(index, 1);
+          next.unshift(updatedChat);
+          chatsRef.current = next;
+          return next;
+        });
 
-		if (chatId === activeChatRef.current) return; // чат открыт — точка не нужна
+        if (chatId === activeChatRef.current) return; // чат открыт — точка не нужна
 
-		setUnread((prev) => ({ ...prev, [chatId]: true }));
-		}
+        setUnread((prev) => ({ ...prev, [chatId]: true }));
+      }
     });
 
     return () => {

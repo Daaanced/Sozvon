@@ -26,10 +26,9 @@ export default function Chat({ chatId }: Props) {
     null,
   );
 
-  const { observe, unobserve, flush, reset } =
-	useVisibleMessages((id) => {
-		handleMarkRead(chatId, id);
-	});
+  const { observe, unobserve, flush, reset } = useVisibleMessages((id) => {
+    handleMarkRead(chatId, id);
+  });
 
   const {
     messages,
