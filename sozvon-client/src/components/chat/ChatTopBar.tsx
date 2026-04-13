@@ -4,29 +4,35 @@ import { useState } from "react";
 import type { User } from "../../api/users";
 import { styles } from "./chat.styles";
 
+type GroupInfo = {
+  name: string;
+  picture: string;
+};
+
 type Props = {
   user: User | null;
+  groupInfo?: GroupInfo | null;
   onCall: () => void;
   onSettings: () => void;
 };
 
-export default function ChatTopBar({ user, onCall, onSettings }: Props) {
+export default function ChatTopBar({ user, groupInfo, onCall, onSettings }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const displayName = groupInfo?.name ?? user?.name ?? "...";
+  const displayPicture = groupInfo?.picture ?? user?.picture ?? null;
+
   return (
     <div style={styles.bar}>
-      {/* Левая часть — аватар + имя собеседника */}
       <div style={styles.userInfo}>
-        {user?.picture && (
-          <img src={user.picture} style={styles.avatar} alt={user.name} />
+        {displayPicture && (
+          <img src={displayPicture} style={styles.avatar} alt={displayName} />
         )}
-        <span style={styles.userName}>{user?.name ?? "..."}</span>
+        <span style={styles.userName}>{displayName}</span>
       </div>
 
-      {/* Правая часть — действия */}
       <div style={styles.actions}>
-        {/* Поиск — разворачивается при клике */}
         {searchOpen && (
           <input
             autoFocus

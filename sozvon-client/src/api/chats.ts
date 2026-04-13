@@ -11,6 +11,13 @@ export function createChat(toUserId: number) {
   });
 }
 
+export function createGroupChat(name: string, memberIds: number[]) {
+  return requestAuth("/chats/create", {
+    method: "POST",
+    body: JSON.stringify({ name, member_ids: memberIds }),
+  });
+}
+
 export function getChats() {
   return requestAuth("/chats");
 }

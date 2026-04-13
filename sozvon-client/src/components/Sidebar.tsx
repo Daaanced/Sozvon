@@ -4,16 +4,18 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useChatContext, DELETED_USER } from "../context/ChatContext";
 import { useState } from "react";
 import SettingsModal from "./SettingsModal";
+import CreateGroupModal from "./CreateGroupModal";
 
 export default function Sidebar() {
   const { chats, myId, myLogin, me, getSafeUser, unread } = useChatContext();
-  console.log(
-    "[Sidebar] render, chats order:",
-    chats.map((c) => `${c.chatId.slice(0, 8)}=${c.updatedAt?.slice(11, 19)}`),
-  );
+//   console.log(
+//     "[Sidebar] render, chats order:",
+//     chats.map((c) => `${c.chatId.slice(0, 8)}=${c.updatedAt?.slice(11, 19)}`),
+//   );
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
 
   return (
     <div style={styles.sidebar}>
@@ -50,40 +52,63 @@ export default function Sidebar() {
 
           <div style={styles.dmHeader}>
             <span style={styles.dmLabel}>Direct messages</span>
-            <button style={styles.dmAddBtn}>+</button>
+            <button
+              style={styles.dmAddBtn}
+              onClick={() => setGroupModalOpen(true)}
+            >
+              +
+            </button>
           </div>
+
+          {groupModalOpen && (
+            <CreateGroupModal onClose={() => setGroupModalOpen(false)} />
+          )}
 
           <div style={styles.chatList}>
-            {chats.map((chat) => {
-              const withId = chat.members.find((m) => m !== myId);
-              const user = withId ? getSafeUser(withId) : DELETED_USER;
-              const isActive = location.pathname.endsWith(chat.chatId);
-              const hasUnread = unread[chat.chatId] && !isActive;
+  {chats.map((chat) => {
+    const isActive = location.pathname.endsWith(chat.chatId);
+    const hasUnread = unread[chat.chatId] && !isActive;
+	console.log("[Sidebar] chat:", chat.chatId.slice(0, 8), "type:", chat.type, "name:", chat.name);
+    // Для group — имя и дефолтная картинка группы
+    // Для direct — имя и аватар собеседника
+    const isGroup = chat.type === "group";
+    const displayName = isGroup
+      ? (chat.name ?? "Групповой чат")
+      : (() => {
+          const withId = chat.members.find((m) => m !== myId);
+          return withId ? getSafeUser(withId).name : DELETED_USER.name;
+        })();
+    const displayPicture = isGroup
+      ? "http://92.127.169.188:8080/static/avatars/group_default.png"
+      : (() => {
+          const withId = chat.members.find((m) => m !== myId);
+          return withId ? getSafeUser(withId).picture : DELETED_USER.picture;
+        })();
 
-              return (
-                <div
-                  key={chat.chatId}
-                  onClick={() => navigate(`/app/chats/${chat.chatId}`)}
-                  style={{
-                    ...styles.chatItem,
-                    background: isActive ? "#e0e0ff" : "#fff",
-                  }}
-                >
-                  <div style={styles.avatar}>
-                    {user.picture ? (
-                      <img src={user.picture} style={styles.avatarImg} />
-                    ) : (
-                      <span>{user.name[0].toUpperCase()}</span>
-                    )}
-                  </div>
+    return (
+      <div
+        key={chat.chatId}
+        onClick={() => navigate(`/app/chats/${chat.chatId}`)}
+        style={{
+          ...styles.chatItem,
+          background: isActive ? "#e0e0ff" : "#fff",
+        }}
+      >
+        <div style={styles.avatar}>
+          {displayPicture ? (
+            <img src={displayPicture} style={styles.avatarImg} />
+          ) : (
+            <span>{displayName[0].toUpperCase()}</span>
+          )}
+        </div>
 
-                  <span style={{ flex: 1 }}>{user.name}</span>
+        <span style={{ flex: 1 }}>{displayName}</span>
 
-                  {hasUnread && <div style={styles.unreadDot} />}
-                </div>
-              );
-            })}
-          </div>
+        {hasUnread && <div style={styles.unreadDot} />}
+      </div>
+    );
+  })}
+</div>
         </div>
       </div>
 

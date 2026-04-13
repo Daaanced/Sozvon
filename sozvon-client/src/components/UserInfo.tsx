@@ -10,11 +10,43 @@ export default function UserInfo() {
   const chat = chats.find((c) => c.chatId === chatId);
 
   if (!chat) {
-    return <div style={{ padding: 16 }}>Select a chat</div>;
+    return <div style={{ padding: 16, color: "#aaa" }}>Выберите чат</div>;
   }
 
+  // ── GROUP ──────────────────────────────────────────────
+  if (chat.type === "group") {
+    return (
+      <div style={{ padding: 16 }}>
+        <div style={gs.groupName}>{chat.name ?? "Групповой чат"}</div>
+        <div style={gs.membersLabel}>Участники ({chat.members.length})</div>
+        <div style={gs.memberList}>
+          {chat.members.map((id) => {
+            const user = getSafeUser(id);
+            return (
+              <div key={id} style={gs.memberItem}>
+                <div style={gs.avatar}>
+                  {user.picture ? (
+                    <img src={user.picture} style={gs.avatarImg} />
+                  ) : (
+                    <span style={gs.avatarLetter}>
+                      {user.name[0].toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <div style={gs.memberName}>{user.name}</div>
+                  {id === myId && <div style={gs.youBadge}>вы</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── DIRECT ─────────────────────────────────────────────
   const withId = chat.members.find((m) => m !== myId);
-  // Если собеседник не найден — показываем DELETED_USER
   const user = withId ? getSafeUser(withId) : DELETED_USER;
 
   return (
@@ -31,10 +63,24 @@ export default function UserInfo() {
             }}
           />
         ) : (
-          <div>{user.login[0].toUpperCase()}</div>
+          <div
+            style={{
+              width: 100,
+              height: 100,
+              borderRadius: "50%",
+              background: "#dde3f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 36,
+              fontWeight: 700,
+              color: "#4a90e2",
+            }}
+          >
+            {user.login[0].toUpperCase()}
+          </div>
         )}
       </div>
-
       <div>
         <b>Login:</b> {user.login}
       </div>
@@ -53,3 +99,51 @@ export default function UserInfo() {
     </div>
   );
 }
+
+const gs: Record<string, React.CSSProperties> = {
+  groupName: {
+    fontWeight: 700,
+    fontSize: 17,
+    color: "#222",
+    marginBottom: 16,
+    wordBreak: "break-word",
+  },
+  membersLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
+    marginBottom: 10,
+  },
+  memberList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  memberItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: "50%",
+    background: "#dde3f0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  avatarImg: { width: "100%", height: "100%", objectFit: "cover" },
+  avatarLetter: { fontWeight: 700, fontSize: 16, color: "#4a90e2" },
+  memberName: { fontSize: 14, color: "#222", fontWeight: 500 },
+  youBadge: {
+    fontSize: 11,
+    color: "#4a90e2",
+    fontWeight: 600,
+    marginTop: 1,
+  },
+};

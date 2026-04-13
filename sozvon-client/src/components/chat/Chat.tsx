@@ -73,8 +73,18 @@ export default function Chat({ chatId }: Props) {
   const [text, setText] = useState("");
 
   const chat = chats.find((c) => c.chatId === chatId);
-  const withId = chat?.members.find((m) => m !== myId);
-  const companion = withId ? getSafeUser(withId) : null;
+	const isGroup = chat?.type === "group";
+
+	// Для direct — собеседник, для group — null
+	const withId = !isGroup ? chat?.members.find((m) => m !== myId) : undefined;
+	const companion = withId ? getSafeUser(withId) : null;
+
+	const groupInfo = isGroup
+  ? {
+      name: chat?.name ?? "Групповой чат",
+      picture: "http://92.127.169.188:8080/static/avatars/group_default.png",
+    }
+  : null;
 
   useEffect(() => {
     reset();
@@ -148,8 +158,9 @@ export default function Chat({ chatId }: Props) {
 
       <ChatTopBar
         user={companion}
-        onCall={() => console.log("call", chatId)}
-        onSettings={() => console.log("settings", chatId)}
+		groupInfo={groupInfo}
+		onCall={() => console.log("call", chatId)}
+		onSettings={() => console.log("settings", chatId)}
       />
 
       <ChatMessages

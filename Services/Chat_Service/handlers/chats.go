@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"Chat_Service/models"
@@ -22,10 +23,64 @@ func (h *ChatHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		ToID int `json:"to_id"`
+		ToID      int    `json:"to_id"`      // для direct
+		Name      string `json:"name"`       // для group
+		MemberIDs []int  `json:"member_ids"` // для group
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ToID == 0 {
-		respondWithError(w, http.StatusBadRequest, "invalid_request", "to_id required")
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "invalid body")
+		return
+	}
+
+	// ── GROUP ──────────────────────────────────────────────────────────
+	if len(body.MemberIDs) > 0 {
+		if strings.TrimSpace(body.Name) == "" {
+			respondWithError(w, http.StatusBadRequest, "validation_error", "name required")
+			return
+		}
+		if len(body.MemberIDs) < 2 || len(body.MemberIDs) > 9 {
+			respondWithError(w, http.StatusBadRequest, "validation_error", "member_ids must be between 2 and 9")
+			return
+		}
+
+		seen := map[int]bool{fromID: true}
+		members := []int{fromID}
+		for _, id := range body.MemberIDs {
+			if !seen[id] {
+				seen[id] = true
+				members = append(members, id)
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		chatID, err := h.db.CreateChat(ctx, members, true, "group", strings.TrimSpace(body.Name))
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "database_error", "Failed to create group chat")
+			return
+		}
+
+		h.hub.SendToUsers(members, models.WSMessage{
+			Event: "chat:created",
+			Data:  map[string]string{"chatId": chatID},
+		})
+
+		log.Printf("Group chat created: %s %q %v", chatID, body.Name, members)
+		respondWithJSON(w, http.StatusCreated, models.Chat{
+			ID:      chatID,
+			Members: members,
+			Active:  true,
+			Type:    "group",
+			Name:    strings.TrimSpace(body.Name),
+		})
+		return
+	}
+
+	// ── DIRECT (старая логика без изменений) ───────────────────────────
+	if body.ToID == 0 {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "to_id or member_ids required")
 		return
 	}
 	if fromID == body.ToID {
