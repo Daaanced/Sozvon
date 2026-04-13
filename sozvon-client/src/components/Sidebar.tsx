@@ -8,10 +8,10 @@ import CreateGroupModal from "./CreateGroupModal";
 
 export default function Sidebar() {
   const { chats, myId, myLogin, me, getSafeUser, unread } = useChatContext();
-//   console.log(
-//     "[Sidebar] render, chats order:",
-//     chats.map((c) => `${c.chatId.slice(0, 8)}=${c.updatedAt?.slice(11, 19)}`),
-//   );
+  //   console.log(
+  //     "[Sidebar] render, chats order:",
+  //     chats.map((c) => `${c.chatId.slice(0, 8)}=${c.updatedAt?.slice(11, 19)}`),
+  //   );
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -65,50 +65,60 @@ export default function Sidebar() {
           )}
 
           <div style={styles.chatList}>
-  {chats.map((chat) => {
-    const isActive = location.pathname.endsWith(chat.chatId);
-    const hasUnread = unread[chat.chatId] && !isActive;
-	console.log("[Sidebar] chat:", chat.chatId.slice(0, 8), "type:", chat.type, "name:", chat.name);
-    // Для group — имя и дефолтная картинка группы
-    // Для direct — имя и аватар собеседника
-    const isGroup = chat.type === "group";
-    const displayName = isGroup
-      ? (chat.name ?? "Групповой чат")
-      : (() => {
-          const withId = chat.members.find((m) => m !== myId);
-          return withId ? getSafeUser(withId).name : DELETED_USER.name;
-        })();
-    const displayPicture = isGroup
-      ? "http://92.127.169.188:8080/static/avatars/group_default.png"
-      : (() => {
-          const withId = chat.members.find((m) => m !== myId);
-          return withId ? getSafeUser(withId).picture : DELETED_USER.picture;
-        })();
+            {chats.map((chat) => {
+              const isActive = location.pathname.endsWith(chat.chatId);
+              const hasUnread = unread[chat.chatId] && !isActive;
+              console.log(
+                "[Sidebar] chat:",
+                chat.chatId.slice(0, 8),
+                "type:",
+                chat.type,
+                "name:",
+                chat.name,
+              );
 
-    return (
-      <div
-        key={chat.chatId}
-        onClick={() => navigate(`/app/chats/${chat.chatId}`)}
-        style={{
-          ...styles.chatItem,
-          background: isActive ? "#e0e0ff" : "#fff",
-        }}
-      >
-        <div style={styles.avatar}>
-          {displayPicture ? (
-            <img src={displayPicture} style={styles.avatarImg} />
-          ) : (
-            <span>{displayName[0].toUpperCase()}</span>
-          )}
-        </div>
+              const isGroup = chat.type === "group";
+              const displayName = isGroup
+                ? (chat.name ?? "Групповой чат")
+                : (() => {
+                    const withId = chat.members.find((m) => m !== myId);
+                    return withId
+                      ? getSafeUser(withId).name
+                      : DELETED_USER.name;
+                  })();
+              const displayPicture = isGroup
+                ? "http://92.127.169.188:8080/static/avatars/group_default.png"
+                : (() => {
+                    const withId = chat.members.find((m) => m !== myId);
+                    return withId
+                      ? getSafeUser(withId).picture
+                      : DELETED_USER.picture;
+                  })();
 
-        <span style={{ flex: 1 }}>{displayName}</span>
+              return (
+                <div
+                  key={chat.chatId}
+                  onClick={() => navigate(`/app/chats/${chat.chatId}`)}
+                  style={{
+                    ...styles.chatItem,
+                    background: isActive ? "#e0e0ff" : "#fff",
+                  }}
+                >
+                  <div style={styles.avatar}>
+                    {displayPicture ? (
+                      <img src={displayPicture} style={styles.avatarImg} />
+                    ) : (
+                      <span>{displayName[0].toUpperCase()}</span>
+                    )}
+                  </div>
 
-        {hasUnread && <div style={styles.unreadDot} />}
-      </div>
-    );
-  })}
-</div>
+                  <span style={{ flex: 1 }}>{displayName}</span>
+
+                  {hasUnread && <div style={styles.unreadDot} />}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -199,7 +209,7 @@ const styles = {
   },
   // Основной сайдбар
   sidebar: {
-    width: 260,
+    width: "100%",
     height: "100vh",
     display: "flex",
     flexDirection: "column" as const,

@@ -186,7 +186,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await getChats();
       const safeChats: Chat[] = Array.isArray(data) ? data : [];
-	  console.log("[loadChats] raw chats:", JSON.stringify(safeChats.map(c => ({ id: c.chatId, type: c.type, name: c.name }))));
+      console.log(
+        "[loadChats] raw chats:",
+        JSON.stringify(
+          safeChats.map((c) => ({ id: c.chatId, type: c.type, name: c.name })),
+        ),
+      );
       const sorted = sortChats(safeChats);
 
       setChats((prev) => {

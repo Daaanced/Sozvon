@@ -16,7 +16,12 @@ type Props = {
   onSettings: () => void;
 };
 
-export default function ChatTopBar({ user, groupInfo, onCall, onSettings }: Props) {
+export default function ChatTopBar({
+  user,
+  groupInfo,
+  onCall,
+  onSettings,
+}: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
