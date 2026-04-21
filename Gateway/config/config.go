@@ -22,9 +22,10 @@ type ServerConfig struct {
 }
 
 type ServicesConfig struct {
-	AuthServiceURL string
-	UserServiceURL string
-	ChatServiceURL string
+	AuthServiceURL  string
+	UserServiceURL  string
+	ChatServiceURL  string
+	VoiceServiceURL string
 }
 
 type JWTConfig struct {
@@ -48,9 +49,10 @@ func Load() (*Config, error) {
 			IdleTimeout:  getDurationEnv("IDLE_TIMEOUT", 60*time.Second),
 		},
 		Services: ServicesConfig{
-			AuthServiceURL: getEnv("AUTH_SERVICE_URL", "http://localhost:8082"),
-			UserServiceURL: getEnv("USER_SERVICE_URL", "http://localhost:8083"),
-			ChatServiceURL: getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
+			AuthServiceURL:  getEnv("AUTH_SERVICE_URL", "http://localhost:8082"),
+			UserServiceURL:  getEnv("USER_SERVICE_URL", "http://localhost:8083"),
+			ChatServiceURL:  getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
+			VoiceServiceURL: getEnv("VOICE_SERVICE_URL", "http://localhost:8085"),
 		},
 		JWT: JWTConfig{
 			SecretKey: []byte(getEnv("JWT_SECRET_KEY", "supersecretkey")),

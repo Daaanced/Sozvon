@@ -82,7 +82,7 @@ export default function Chat({ chatId }: Props) {
   const groupInfo = isGroup
     ? {
         name: chat?.name ?? "Групповой чат",
-        picture: "http://92.127.169.188:8080/static/avatars/group_default.png",
+        picture: "http://90.189.225.58:8080/static/avatars/group_default.png",
       }
     : null;
 

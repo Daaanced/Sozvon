@@ -6,6 +6,8 @@
 
    1.3. Chat_Service >Run chat_service.exe
 
+   1.4. Voice_Service >Run Voice_Service.exe
+
 2. DBs
 
    2.1. authdb >Enter psql -U postgres authdb

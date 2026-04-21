@@ -58,6 +58,9 @@ func (h *GatewayHandler) RegisterRoutes(r *mux.Router) {
 	// WebSocket
 	r.HandleFunc("/ws", h.wsHandler.HandleWebSocket)
 
+	r.HandleFunc("/ws/voice", h.wsHandler.HandleVoiceWebSocket)
+	r.PathPrefix("/voice/").HandlerFunc(h.proxyToVoice)
+
 	// Health check
 	r.HandleFunc("/health", h.healthCheck).Methods("GET")
 }
@@ -79,6 +82,10 @@ func (h *GatewayHandler) proxyToChats(w http.ResponseWriter, r *http.Request) {
 
 func (h *GatewayHandler) proxyToMedia(w http.ResponseWriter, r *http.Request) {
 	h.proxyRequest(w, r, h.config.Services.ChatServiceURL)
+}
+
+func (h *GatewayHandler) proxyToVoice(w http.ResponseWriter, r *http.Request) {
+	h.proxyRequest(w, r, h.config.Services.VoiceServiceURL)
 }
 
 // proxyRequest проксирует HTTP запрос к целевому сервису

@@ -84,7 +84,7 @@ func Load() (*Config, error) {
 		Media: MediaConfig{
 			Directory:   getEnv("MEDIA_DIR", "./Media"),
 			MaxFileSize: 30 * 1024 * 1024, // 30 MB
-			BaseURL:     getEnv("MEDIA_BASE_URL", "http://92.127.169.188:8080"),
+			BaseURL:     getEnv("MEDIA_BASE_URL", "http://90.189.225.58:8080"),
 		},
 		JWT: JWTConfig{
 			SecretKey: []byte(getEnv("JWT_SECRET_KEY", "supersecretkey")),

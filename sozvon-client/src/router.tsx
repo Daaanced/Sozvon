@@ -6,6 +6,7 @@ import Main from "./pages/Main";
 import ChatPage from "./pages/ChatPage";
 import AppShell from "./layouts/AppShell";
 import { ProtectedRoute } from "./functions/protect";
+import VoiceRoomsPage from "./components/voiceRooms/VoiceRoomsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/login" replace /> },
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
             path: "chats/:chatId",
             element: <ChatPage />,
           },
+          { path: "rooms", element: <VoiceRoomsPage /> },
         ],
       },
     ],

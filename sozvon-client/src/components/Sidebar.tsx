@@ -17,6 +17,8 @@ export default function Sidebar() {
   const [open, setOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
 
+  const isRooms = location.pathname === "/app/rooms";
+
   return (
     <div style={styles.sidebar}>
       {/* ВЕРХНИЕ КОЛОНКИ */}
@@ -44,12 +46,18 @@ export default function Sidebar() {
 
         {/* CHAT SIDEBAR */}
         <div style={styles.chatSidebar}>
-          <div style={styles.sectionBtn}>🔊 General voice channels</div>
-
+          <div
+            style={{
+              ...styles.sectionBtn,
+              background: isRooms ? "#e0e0ff" : "#fff",
+            }}
+            onClick={() => navigate("/app/rooms")}
+          >
+            🔊 Voice rooms
+          </div>
           <div style={styles.sectionBtn} onClick={() => navigate("/app")}>
             🔍 Search users
           </div>
-
           <div style={styles.dmHeader}>
             <span style={styles.dmLabel}>Direct messages</span>
             <button
@@ -59,11 +67,9 @@ export default function Sidebar() {
               +
             </button>
           </div>
-
           {groupModalOpen && (
             <CreateGroupModal onClose={() => setGroupModalOpen(false)} />
           )}
-
           <div style={styles.chatList}>
             {chats.map((chat) => {
               const isActive = location.pathname.endsWith(chat.chatId);
@@ -87,7 +93,7 @@ export default function Sidebar() {
                       : DELETED_USER.name;
                   })();
               const displayPicture = isGroup
-                ? "http://92.127.169.188:8080/static/avatars/group_default.png"
+                ? "http://90.189.225.58:8080/static/avatars/group_default.png"
                 : (() => {
                     const withId = chat.members.find((m) => m !== myId);
                     return withId
