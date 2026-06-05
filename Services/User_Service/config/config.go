@@ -81,7 +81,7 @@ func Load() (*Config, error) {
 			MaxUploadSize: 5 * 1024 * 1024, // 5MB
 		},
 		Storage: StorageConfig{
-			BackendURL: getEnv("BACKEND_URL", "http://90.189.225.58:8080"),
+			BackendURL: getEnv("BACKEND_URL", "https://zvonya.ru/api"),
 			CDNEnabled: getBoolEnv("CDN_ENABLED", false),
 			CDNURL:     getEnv("CDN_URL", ""),
 		},

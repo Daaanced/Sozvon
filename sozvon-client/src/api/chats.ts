@@ -2,7 +2,7 @@
 import { requestAuth } from "./http";
 import { PendingFile } from "../components/chat/chat.types";
 
-const API_URL = "http://90.189.225.58:8080";
+const API_URL = "https://zvonya.ru/api";
 
 export function createChat(toUserId: number) {
   return requestAuth("/chats/create", {

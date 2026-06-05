@@ -42,12 +42,12 @@ export default function UserSearchResult({
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "cover", // ✅
+            objectFit: "cover",
           }}
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src =
-              "http://90.189.225.58:8080/static/avatars/default.png";
+              "https://zvonya.ru/api/static/avatars/default.png";
           }}
         />
       </div>

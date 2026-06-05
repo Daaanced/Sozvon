@@ -1,9 +1,10 @@
 // sozvon-client/src/components/voiceRooms/VoiceRoomsPage.tsx
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { getRooms, createRoom, deleteRoom, voiceClient } from "../../api/voice";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { getRooms, createRoom, deleteRoom } from "../../api/voice";
 import { RoomInfo, PeerInfo } from "./voice.types";
-
+import { s } from "./voice.styles";
+import { useVoiceContext } from "../../context/VoiceContext";
 // ── Logger ─────────────────────────────────────────────────────────────────
 
 const log = {
@@ -13,12 +14,6 @@ const log = {
     console.warn(`%c[Voice] ${msg}`, "color:#fcd34d;font-weight:600", ...args),
   error: (msg: string, ...args: any[]) =>
     console.error(`%c[Voice] ${msg}`, "color:#f87171;font-weight:600", ...args),
-  event: (msg: string, data?: any) =>
-    console.log(
-      `%c[Voice ←] ${msg}`,
-      "color:#818cf8;font-weight:600",
-      data ?? "",
-    ),
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -32,17 +27,18 @@ export default function VoiceRoomsPage() {
   const [showCreateInput, setShowCreateInput] = useState(false);
 
   // Текущая комната и участники
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [peers, setPeers] = useState<PeerInfo[]>([]);
-  const [muted, setMuted] = useState(false);
-  const [callActive, setCallActive] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-
-  // Аудио элементы для каждого peer
-  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const {
+    activeRoomId,
+    peers,
+    muted,
+    callActive,
+    connecting,
+    joinRoom,
+    leaveRoom,
+    toggleMute,
+  } = useVoiceContext();
 
   // ── Загрузка комнат ──────────────────────────────────────────────────────
-
   const fetchRooms = useCallback(async () => {
     try {
       log.info("Fetching rooms...");
@@ -66,80 +62,6 @@ export default function VoiceRoomsPage() {
 
   // ── События голосового клиента ───────────────────────────────────────────
 
-  useEffect(() => {
-    voiceClient.setEvents({
-      onRoomState: (incomingPeers) => {
-        log.event("room_state", incomingPeers);
-        setPeers(incomingPeers);
-      },
-      onPeerJoined: (peer) => {
-        log.event("peer_joined", peer);
-        setPeers((prev) => {
-          if (prev.find((p) => p.peer_id === peer.peer_id)) return prev;
-          return [...prev, peer];
-        });
-        fetchRooms();
-      },
-      onPeerLeft: (peerId) => {
-        log.event("peer_left", { peerId });
-        setPeers((prev) => prev.filter((p) => p.peer_id !== peerId));
-        // Убираем аудио элемент
-        const audio = audioRefs.current.get(peerId);
-        if (audio) {
-          audio.srcObject = null;
-          audioRefs.current.delete(peerId);
-        }
-        fetchRooms();
-      },
-      onPeerMuted: (peerId, isMuted) => {
-        log.event("peer_muted", { peerId, muted: isMuted });
-        setPeers((prev) =>
-          prev.map((p) =>
-            p.peer_id === peerId ? { ...p, muted: isMuted } : p,
-          ),
-        );
-      },
-      onTrack: (peerId, stream) => {
-        log.event("track received", { peerId, stream });
-        // Создаём аудио элемент для этого peer
-        let audio = audioRefs.current.get(peerId);
-        if (!audio) {
-          audio = new Audio();
-          audio.autoplay = true;
-          audioRefs.current.set(peerId, audio);
-          log.info(`Created audio element for peer ${peerId}`);
-        }
-        audio.srcObject = stream;
-        audio.play().catch((e) => log.error("Audio play failed", e));
-      },
-      onConnected: () => {
-        log.info("WebRTC connected ✓");
-        setConnecting(false);
-        setCallActive(true);
-      },
-      onDisconnected: () => {
-        log.warn("WebRTC disconnected");
-        setCallActive(false);
-        setConnecting(false);
-      },
-      onError: (code, message) => {
-        log.error(`Server error [${code}]: ${message}`);
-        setError(message);
-        setConnecting(false);
-      },
-    });
-  }, [fetchRooms]);
-
-  // Cleanup при размонтировании
-  useEffect(() => {
-    return () => {
-      if (voiceClient.getCurrentRoomId()) {
-        log.info("Page unmounted — leaving room");
-        voiceClient.leaveRoom();
-      }
-    };
-  }, []);
-
   // ── Действия ─────────────────────────────────────────────────────────────
 
   const handleCreateRoom = async () => {
@@ -161,50 +83,9 @@ export default function VoiceRoomsPage() {
     }
   };
 
-  const handleJoin = async (roomId: string) => {
-    if (activeRoomId === roomId) return;
-    log.info(`Joining room ${roomId}`);
-    setConnecting(true);
-    setActiveRoomId(roomId);
-    setPeers([]);
-
-    try {
-      await voiceClient.joinRoom(roomId);
-      log.info("Joined room, starting call...");
-      await voiceClient.startCall();
-    } catch (e: any) {
-      log.error("Join failed", e);
-      setError(e.message);
-      setConnecting(false);
-      setActiveRoomId(null);
-    }
-  };
-
-  const handleLeave = () => {
-    log.info(`Leaving room ${activeRoomId}`);
-    voiceClient.leaveRoom();
-    setActiveRoomId(null);
-    setPeers([]);
-    setCallActive(false);
-    setMuted(false);
-    // Чистим аудио
-    audioRefs.current.forEach((a) => {
-      a.srcObject = null;
-    });
-    audioRefs.current.clear();
-    fetchRooms();
-  };
-
-  const handleMute = () => {
-    const next = !muted;
-    log.info(next ? "Muting mic" : "Unmuting mic");
-    voiceClient.setMuted(next);
-    setMuted(next);
-  };
-
   const handleDeleteRoom = async (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (activeRoomId === roomId) handleLeave();
+    if (activeRoomId === roomId) leaveRoom();
     try {
       log.info(`Deleting room ${roomId}`);
       await deleteRoom(roomId);
@@ -295,14 +176,14 @@ export default function VoiceRoomsPage() {
                 ...s.callActionBtn,
                 background: muted ? "#ef4444" : "#374151",
               }}
-              onClick={handleMute}
+              onClick={toggleMute}
               title={muted ? "Unmute" : "Mute"}
             >
               {muted ? "🔇" : "🎙️"}
             </button>
             <button
               style={{ ...s.callActionBtn, background: "#dc2626" }}
-              onClick={handleLeave}
+              onClick={leaveRoom}
             >
               📵 Leave
             </button>
@@ -337,13 +218,13 @@ export default function VoiceRoomsPage() {
                   </div>
                   <div style={s.roomActions}>
                     {isActive ? (
-                      <button style={s.leaveBtn} onClick={handleLeave}>
+                      <button style={s.leaveBtn} onClick={leaveRoom}>
                         Leave
                       </button>
                     ) : (
                       <button
                         style={{ ...s.joinBtn, opacity: connecting ? 0.6 : 1 }}
-                        onClick={() => handleJoin(room.id)}
+                        onClick={() => joinRoom(room.id, room.name)}
                         disabled={connecting}
                       >
                         Join
@@ -388,210 +269,24 @@ export default function VoiceRoomsPage() {
 // ── PeerBadge ──────────────────────────────────────────────────────────────
 
 function PeerBadge({ peer, live }: { peer: PeerInfo; live?: boolean }) {
+  // Оптимизируем создание объекта стилей
+  const avatarStyle = useMemo(
+    () => ({
+      ...s.peerAvatar,
+      ...(live ? s.peerAvatarLive : {}),
+    }),
+    [live],
+  );
+
+  const displayName = peer.username || "Anonymous";
+  const firstLetter = displayName[0].toUpperCase();
+
   return (
     <div style={s.peerBadge}>
-      <div style={{ ...s.peerAvatar, ...(live ? s.peerAvatarLive : {}) }}>
-        {peer.username?.[0]?.toUpperCase() ?? "?"}
-      </div>
-      <span style={s.peerName}>{peer.username}</span>
+      <div style={avatarStyle}>{firstLetter}</div>
+      <span style={s.peerName}>{displayName}</span>
       {peer.muted && <span title="Muted">🔇</span>}
       {live && !peer.muted && <span title="Speaking">🎙️</span>}
     </div>
   );
 }
-
-// ── Styles ─────────────────────────────────────────────────────────────────
-
-const s: Record<string, React.CSSProperties> = {
-  page: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    gap: 12,
-    fontFamily: "'DM Sans', system-ui, sans-serif",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 12,
-    borderBottom: "1px solid #e5e7eb",
-  },
-  headerLeft: { display: "flex", alignItems: "center", gap: 12 },
-  headerIcon: { fontSize: 28 },
-  headerTitle: { fontWeight: 700, fontSize: 18, color: "#111827" },
-  headerSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  createBtn: {
-    padding: "7px 14px",
-    background: "#111827",
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-    transition: "opacity 0.15s",
-  },
-  createRow: {
-    display: "flex",
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    padding: "8px 12px",
-    border: "1.5px solid #e5e7eb",
-    borderRadius: 8,
-    fontSize: 14,
-    outline: "none",
-    fontFamily: "inherit",
-  },
-  errorBanner: {
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#dc2626",
-    borderRadius: 8,
-    padding: "10px 14px",
-    fontSize: 13,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  errorClose: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: "#dc2626",
-    fontSize: 14,
-  },
-  callBar: {
-    background: "#111827",
-    color: "#fff",
-    borderRadius: 10,
-    padding: "10px 16px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  callBarLeft: { display: "flex", alignItems: "center", gap: 10 },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    display: "inline-block",
-    flexShrink: 0,
-  },
-  callBarText: { fontSize: 13, color: "#d1d5db" },
-  callBarRoom: { fontSize: 13, fontWeight: 700, color: "#fff" },
-  callBarActions: { display: "flex", gap: 8 },
-  callActionBtn: {
-    padding: "6px 12px",
-    border: "none",
-    borderRadius: 7,
-    color: "#fff",
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  roomsList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    overflowY: "auto",
-    flex: 1,
-  },
-  empty: {
-    color: "#9ca3af",
-    fontSize: 14,
-    textAlign: "center",
-    paddingTop: 32,
-  },
-  roomCard: {
-    background: "#fff",
-    border: "1.5px solid #e5e7eb",
-    borderRadius: 12,
-    padding: "14px 16px",
-    transition: "border-color 0.15s, box-shadow 0.15s",
-  },
-  roomCardActive: {
-    borderColor: "#6366f1",
-    boxShadow: "0 0 0 3px rgba(99,102,241,0.1)",
-  },
-  roomCardTop: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  roomInfo: { display: "flex", alignItems: "center", gap: 12 },
-  roomIcon: { fontSize: 22 },
-  roomName: { fontWeight: 600, fontSize: 15, color: "#111827" },
-  roomMeta: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  roomActions: { display: "flex", alignItems: "center", gap: 6 },
-  joinBtn: {
-    padding: "6px 16px",
-    background: "#6366f1",
-    color: "#fff",
-    border: "none",
-    borderRadius: 7,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  leaveBtn: {
-    padding: "6px 16px",
-    background: "#f3f4f6",
-    color: "#374151",
-    border: "none",
-    borderRadius: 7,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  deleteBtn: {
-    width: 28,
-    height: 28,
-    background: "none",
-    border: "1px solid #e5e7eb",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 12,
-    color: "#9ca3af",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  peersList: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: "1px solid #f3f4f6",
-  },
-  peerBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    background: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    borderRadius: 20,
-    padding: "4px 10px 4px 4px",
-  },
-  peerAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: "50%",
-    background: "#e0e7ff",
-    color: "#4338ca",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 11,
-    fontWeight: 700,
-    flexShrink: 0,
-  },
-  peerAvatarLive: {
-    background: "#d1fae5",
-    color: "#065f46",
-  },
-  peerName: { fontSize: 13, color: "#374151", fontWeight: 500 },
-};

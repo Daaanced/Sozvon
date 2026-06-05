@@ -5,6 +5,7 @@ import { useChatContext, DELETED_USER } from "../context/ChatContext";
 import { useState } from "react";
 import SettingsModal from "./SettingsModal";
 import CreateGroupModal from "./CreateGroupModal";
+import { useVoiceContext } from "../context/VoiceContext";
 
 export default function Sidebar() {
   const { chats, myId, myLogin, me, getSafeUser, unread } = useChatContext();
@@ -16,6 +17,7 @@ export default function Sidebar() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const { activeRoomName, leaveRoom } = useVoiceContext();
 
   const isRooms = location.pathname === "/app/rooms";
 
@@ -93,7 +95,7 @@ export default function Sidebar() {
                       : DELETED_USER.name;
                   })();
               const displayPicture = isGroup
-                ? "http://90.189.225.58:8080/static/avatars/group_default.png"
+                ? "https://zvonya.ru/api/static/avatars/group_default.png"
                 : (() => {
                     const withId = chat.members.find((m) => m !== myId);
                     return withId
@@ -128,6 +130,29 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {activeRoomName && (
+        <div style={styles.voicePanel}>
+          <div>
+            <div style={styles.voiceTitle}>🔊 Voice connected</div>
+
+            <div style={styles.voiceRoom}>{activeRoomName}</div>
+          </div>
+
+          <div style={styles.voiceButtons}>
+            <button style={styles.voiceBtn} title="Share screen">
+              🖥️
+            </button>
+
+            <button
+              style={styles.voiceBtnLeave}
+              onClick={leaveRoom}
+              title="Leave"
+            >
+              📵
+            </button>
+          </div>
+        </div>
+      )}
       {/* USER BLOCK */}
       <div style={styles.meBlock}>
         <div style={styles.meInfo}>
@@ -315,5 +340,46 @@ const styles = {
     borderRadius: 6,
     border: "none",
     cursor: "pointer",
+  },
+  voicePanel: {
+    borderTop: "1px solid #ddd",
+    padding: "10px",
+    background: "#f3f4f6",
+    borderRadius: 8,
+    marginTop: 8,
+  },
+
+  voiceTitle: {
+    fontSize: 12,
+    color: "#666",
+  },
+
+  voiceRoom: {
+    fontWeight: 600,
+    marginTop: 4,
+  },
+
+  voiceButtons: {
+    display: "flex",
+    gap: 6,
+    marginTop: 8,
+  },
+
+  voiceBtn: {
+    flex: 1,
+    padding: 6,
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
+
+  voiceBtnLeave: {
+    flex: 1,
+    padding: 6,
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    background: "#dc2626",
+    color: "#fff",
   },
 };
