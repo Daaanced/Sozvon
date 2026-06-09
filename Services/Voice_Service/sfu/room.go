@@ -76,6 +76,18 @@ func (r *Room) AddPeer(peer *Peer) {
 		}
 	})
 
+	peer.pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		log.Printf("[room %s] peer %s ICE state: %s", r.ID, peer.ID, state)
+	})
+
+	peer.pc.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
+		log.Printf("[room %s] peer %s ICE gathering: %s", r.ID, peer.ID, state)
+	})
+
+	peer.pc.OnSignalingStateChange(func(state webrtc.SignalingState) {
+		log.Printf("[room %s] peer %s signaling state: %s", r.ID, peer.ID, state)
+	})
+
 	// Уведомить всех существующих участников о новом peer'е
 	joined := signal.OutgoingMessage{
 		Type:    signal.TypePeerJoined,
@@ -90,6 +102,9 @@ func (r *Room) AddPeer(peer *Peer) {
 		Type:    signal.TypeRoomState,
 		Payload: r.stateFor(peer.ID),
 	})
+
+	// Подписать нового peer'а на уже активные треки существующих участников
+	r.subscribeNewPeerToExisting(peer)
 }
 
 // distributeTrack — запускает fan-out горутину для трека издателя.
@@ -153,6 +168,16 @@ func (r *Room) subscribeNewPeerToExisting(newPeer *Peer) {
 			continue
 		}
 
+		// Проверяем — уже подписан?
+		newPeer.mu.RLock()
+		_, alreadySubscribed := newPeer.localTracks[publisher.ID]
+		newPeer.mu.RUnlock()
+		if alreadySubscribed {
+			log.Printf("[room] peer %s already subscribed to %s, skipping fanout.add",
+				newPeer.ID, publisher.ID)
+			continue
+		}
+
 		lt, err := newPeer.SubscribeToTrack(publisher.ID, remoteTrack)
 		if err != nil {
 			log.Printf("[room] new peer %s subscribe to %s: %v",
@@ -160,7 +185,6 @@ func (r *Room) subscribeNewPeerToExisting(newPeer *Peer) {
 			continue
 		}
 
-		// Добавляем в живой fanout — пакеты сразу начнут идти
 		fanout.add(lt)
 		log.Printf("[room] new peer %s subscribed to existing track from %s",
 			newPeer.ID, publisher.ID)

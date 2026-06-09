@@ -44,7 +44,7 @@ export function deleteRoom(roomId: string): Promise<void> {
 
 // ── VoiceClient ────────────────────────────────────────────────────────────
 
-const STUN_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+const STUN_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.sipnet.ru:3478" }];
 
 class VoiceClient {
   private pc: RTCPeerConnection | null = null;
@@ -52,8 +52,8 @@ class VoiceClient {
   private currentRoomId: string | null = null;
   private events: VoiceEvents = {};
   private unsubscribe: (() => void) | null = null;
-  private isNegotiating = false;
-  private pendingOffer: string | null = null;
+  //private isNegotiating = false;
+  //private pendingOffer: string | null = null;
   // peer_id → MediaStream — треки от других участников
   private remoteStreams: Map<string, MediaStream> = new Map();
 
@@ -96,9 +96,7 @@ class VoiceClient {
   // startCall — захватить микрофон и отправить offer
   async startCall() {
     if (!this.pc) {
-      console.error(
-        "[voice] PeerConnection не инициализирован, сначала joinRoom()",
-      );
+      console.error("[voice] PC не инициализирован");
       return;
     }
 
@@ -108,14 +106,12 @@ class VoiceClient {
         video: false,
       });
 
-      // Добавляем аудио трек в PeerConnection
+      // addTrack сам файрит onnegotiationneeded → sendOffer
       this.localStream.getAudioTracks().forEach((track) => {
         this.pc!.addTrack(track, this.localStream!);
       });
 
-      await this.sendOffer();
-
-      this.events.onConnected?.();
+      // onConnected вызовется из onconnectionstatechange
     } catch (err) {
       console.error("[voice] getUserMedia error:", err);
       this.events.onError?.(
@@ -165,7 +161,6 @@ class VoiceClient {
   private initPC() {
     this.pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
 
-    // ICE кандидат найден — отправляем на сервер
     this.pc.onicecandidate = ({ candidate }) => {
       if (!candidate) return;
       sendWS({
@@ -178,17 +173,13 @@ class VoiceClient {
       });
     };
 
-    // Входящий трек от другого участника
-    // Pion шлёт треки через re-offer, поэтому они приходят после renegotiation
     this.pc.ontrack = (event) => {
       const stream = event.streams[0] ?? new MediaStream([event.track]);
-
-      // Определяем peerId по streamId — сервер называет стримы "voice-{peerId}"
       const streamId = event.streams[0]?.id ?? "";
       const peerId = streamId.startsWith("voice-")
         ? streamId.slice(6)
         : streamId;
-
+      console.log("[voice] ontrack peerId:", peerId, "stream:", streamId);
       this.remoteStreams.set(peerId, stream);
       this.events.onTrack?.(peerId, stream);
     };
@@ -196,18 +187,23 @@ class VoiceClient {
     this.pc.onconnectionstatechange = () => {
       const state = this.pc?.connectionState;
       console.log("[voice] connection state:", state);
-
+      if (state === "connected") {
+        this.events.onConnected?.();
+      }
       if (state === "failed" || state === "closed") {
         this.events.onDisconnected?.();
         this.cleanup();
       }
     };
 
+    // onnegotiationneeded — только для случая когда сервер ещё не прислал offer
+    // В нашей архитектуре сервер всегда инициирует renegotiation сам,
+    // поэтому здесь только первичный offer (до получения любого серверного offer)
     this.pc.onnegotiationneeded = async () => {
-      // Браузер просит re-offer (например при добавлении трека)
-      // В нашем случае сервер инициирует renegotiation сам через Pion,
-      // поэтому здесь обрабатываем только первичный offer
-      if (this.isNegotiating) return;
+      console.log(
+        "[voice] onnegotiationneeded, state:",
+        this.pc?.signalingState,
+      );
       if (this.pc?.signalingState !== "stable") return;
       if (!this.localStream) return;
       await this.sendOffer();
@@ -216,16 +212,17 @@ class VoiceClient {
 
   private async sendOffer() {
     if (!this.pc) return;
-    if (this.isNegotiating) return; // ← guard
-
-    this.isNegotiating = true; // ← lock
+    if (this.pc.signalingState !== "stable") {
+      console.log("[voice] sendOffer skipped, state:", this.pc.signalingState);
+      return;
+    }
     try {
       const offer = await this.pc.createOffer();
       await this.pc.setLocalDescription(offer);
+      console.log("[voice] offer sent");
       sendWS({ type: "offer", payload: { sdp: offer.sdp } });
-    } finally {
-      // Снимаем lock только когда получим answer
-      // (см. handleRemoteAnswer ниже)
+    } catch (err) {
+      console.error("[voice] sendOffer error:", err);
     }
   }
 
@@ -296,16 +293,14 @@ class VoiceClient {
   private async handleRemoteOffer(sdp: string) {
     if (!this.pc) return;
 
-    // Если идёт наш offer — делаем rollback и принимаем серверный
+    console.log("[voice] handleRemoteOffer, state:", this.pc.signalingState);
+
     if (this.pc.signalingState === "have-local-offer") {
-      console.log("[Voice] glare: rolling back local offer");
+      console.log("[voice] glare: rollback");
       try {
         await this.pc.setLocalDescription({ type: "rollback" });
-        this.isNegotiating = false;
-        this.pendingOffer = null;
       } catch (err) {
         console.error("[voice] rollback failed:", err);
-        this.pendingOffer = sdp;
         return;
       }
     }
@@ -331,19 +326,11 @@ class VoiceClient {
 
   private async handleRemoteAnswer(sdp: string) {
     if (!this.pc) return;
+    console.log("[voice] handleRemoteAnswer, state:", this.pc.signalingState);
     try {
       await this.pc.setRemoteDescription({ type: "answer", sdp });
-      this.isNegotiating = false;
-
-      if (this.pendingOffer) {
-        const offer = this.pendingOffer;
-        this.pendingOffer = null;
-        console.log("[Voice] applying pending offer after answer");
-        await this.applyRemoteOffer(offer);
-      }
     } catch (err) {
-      console.error("[voice] handle remote answer:", err);
-      this.isNegotiating = false;
+      console.error("[voice] handleRemoteAnswer error:", err);
     }
   }
 
@@ -378,8 +365,8 @@ class VoiceClient {
     this.currentRoomId = null;
 
     this.events.onDisconnected?.();
-    this.isNegotiating = false;
-    this.pendingOffer = null;
+    //this.isNegotiating = false;
+    //this.pendingOffer = null;
   }
 }
 

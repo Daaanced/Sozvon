@@ -24,6 +24,12 @@ func newTrackFanout(publisherID string) *trackFanout {
 func (f *trackFanout) add(track *webrtc.TrackLocalStaticRTP) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for _, t := range f.tracks {
+		if t == track {
+			log.Printf("[fanout %s] duplicate track ignored", f.publisherID)
+			return
+		}
+	}
 	f.tracks = append(f.tracks, track)
 	log.Printf("[fanout %s] subscriber added, total: %d", f.publisherID, len(f.tracks))
 }

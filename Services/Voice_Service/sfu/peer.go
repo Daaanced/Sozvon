@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"Voice_Service/signal"
 
@@ -61,6 +62,7 @@ type Peer struct {
 	closed bool
 
 	closeOnce sync.Once
+	renegCh   chan struct{}
 }
 
 func newPeer(id, userID, username, roomID string, pc *webrtc.PeerConnection) *Peer {
@@ -74,6 +76,32 @@ func newPeer(id, userID, username, roomID string, pc *webrtc.PeerConnection) *Pe
 		localTracks:      make(map[string]*webrtc.TrackLocalStaticRTP),
 		subscribedLayers: make(map[string]SimulcastLayer),
 		pendingICE:       make([]webrtc.ICECandidateInit, 0),
+		renegCh:          make(chan struct{}, 1),
+	}
+}
+
+func (p *Peer) scheduleRenegotiate() {
+	log.Printf("[peer %s] scheduleRenegotiate called, signaling state: %s",
+		p.ID, p.pc.SignalingState())
+	select {
+	case p.renegCh <- struct{}{}:
+		log.Printf("[peer %s] renegotiation scheduled", p.ID)
+	default:
+		log.Printf("[peer %s] renegotiation already pending, skipped", p.ID)
+	}
+}
+
+func (p *Peer) runRenegotiationWorker() {
+	for range p.renegCh {
+		state := p.pc.SignalingState()
+		log.Printf("[peer %s] renegWorker tick, state=%s", p.ID, state)
+
+		if state != webrtc.SignalingStateStable {
+			log.Printf("[peer %s] not stable, retrying in 200ms", p.ID)
+			time.AfterFunc(200*time.Millisecond, p.scheduleRenegotiate)
+			continue
+		}
+		p.renegotiate()
 	}
 }
 
@@ -139,20 +167,15 @@ func (p *Peer) HandleOffer(sdp string) (string, error) {
 		SDP:  sdp,
 	}
 
-	if p.pc.SignalingState() == webrtc.SignalingStateHaveLocalOffer {
-		log.Printf("[peer %s] glare: rolling back local offer, accepting client offer", p.ID)
-
-		// Откатываем свой offer
-		if err := p.pc.SetLocalDescription(webrtc.SessionDescription{
-			Type: webrtc.SDPTypeRollback,
-		}); err != nil {
-			log.Printf("[peer %s] rollback failed: %v, buffering instead", p.ID, err)
-			// Если rollback не поддерживается — буферизируем как раньше
-			p.mu.Lock()
-			p.pendingRemoteOffer = &offer
-			p.mu.Unlock()
-			return "", nil
-		}
+	state := p.pc.SignalingState()
+	log.Printf("[peer %s] HandleOffer called, state=%s", p.ID, state)
+	if state != webrtc.SignalingStateStable {
+		// Не пытаемся rollback — просто буферизируем
+		p.mu.Lock()
+		p.pendingRemoteOffer = &offer
+		p.mu.Unlock()
+		log.Printf("[peer %s] offer buffered, state=%s", p.ID, state)
+		return "", nil
 	}
 
 	return p.applyOffer(offer)
@@ -192,6 +215,7 @@ func (p *Peer) applyOffer(offer webrtc.SessionDescription) (string, error) {
 
 // HandleAnswer — обрабатывает SDP answer от клиента (ответ на re-offer сервера)
 func (p *Peer) HandleAnswer(sdp string) error {
+	log.Printf("[peer %s] HandleAnswer called, state=%s", p.ID, p.pc.SignalingState())
 	answer := webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
 		SDP:  sdp,
@@ -203,12 +227,34 @@ func (p *Peer) HandleAnswer(sdp string) error {
 	p.mu.Lock()
 	pending := p.pendingICE
 	p.pendingICE = nil
+	pendingOffer := p.pendingRemoteOffer
+	p.pendingRemoteOffer = nil
 	p.mu.Unlock()
 
+	log.Printf("[peer %s] answer applied, new state=%s, pendingOffer=%v",
+		p.ID, p.pc.SignalingState(), pendingOffer != nil)
 	for _, c := range pending {
 		if err := p.pc.AddICECandidate(c); err != nil {
 			log.Printf("[peer %s] add pending ICE: %v", p.ID, err)
 		}
+	}
+
+	// Применяем буферизированный offer от клиента
+	if pendingOffer != nil {
+		log.Printf("[peer %s] applying buffered remote offer after answer", p.ID)
+		go func() {
+			answerSDP, err := p.applyOffer(*pendingOffer)
+			if err != nil {
+				log.Printf("[peer %s] apply buffered offer: %v", p.ID, err)
+				return
+			}
+			if answerSDP != "" {
+				p.Send(signal.OutgoingMessage{
+					Type:    signal.TypeAnswer,
+					Payload: signal.SDPPayload{SDP: answerSDP},
+				})
+			}
+		}()
 	}
 
 	return nil
@@ -218,11 +264,14 @@ func (p *Peer) HandleAnswer(sdp string) error {
 // Если RemoteDescription ещё не установлен — кандидат буферизируется.
 func (p *Peer) AddICECandidate(init webrtc.ICECandidateInit) error {
 	if p.pc.RemoteDescription() == nil {
+		log.Printf("[peer %s] ICE buffered (no remote desc yet): %s",
+			p.ID, init.Candidate)
 		p.mu.Lock()
 		p.pendingICE = append(p.pendingICE, init)
 		p.mu.Unlock()
 		return nil
 	}
+	log.Printf("[peer %s] ICE candidate added: %s", p.ID, init.Candidate)
 	return p.pc.AddICECandidate(init)
 }
 
@@ -254,7 +303,7 @@ func (p *Peer) SubscribeToTrack(publisherID string, remoteTrack *webrtc.TrackRem
 	p.localTracks[publisherID] = localTrack
 
 	// Re-offer — сообщаем клиенту о новом треке
-	go p.renegotiate()
+	go p.scheduleRenegotiate()
 
 	return localTrack, nil
 }
@@ -280,7 +329,7 @@ func (p *Peer) UnsubscribeFromTrack(publisherID string) {
 	}
 
 	delete(p.localTracks, publisherID)
-	go p.renegotiate()
+	p.scheduleRenegotiate()
 }
 
 // SetPreferredLayer — установить предпочтительный simulcast слой.

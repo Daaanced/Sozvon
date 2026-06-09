@@ -186,7 +186,7 @@ func (e *Engine) JoinRoom(roomID, peerID, userID, username string) (*Peer, *Room
 	}
 
 	peer := newPeer(peerID, userID, username, roomID, pc)
-
+	go peer.runRenegotiationWorker()
 	// Регистрируем обратный индекс
 	e.peerRoom.Store(peerID, roomID)
 
@@ -194,7 +194,7 @@ func (e *Engine) JoinRoom(roomID, peerID, userID, username string) (*Peer, *Room
 	room.AddPeer(peer)
 
 	// Подписываем на уже существующие треки
-	room.subscribeNewPeerToExisting(peer)
+	//room.subscribeNewPeerToExisting(peer)
 
 	log.Printf("[sfu] peer %s (%s) joined room %s", peerID, username, roomID)
 	return peer, room, nil

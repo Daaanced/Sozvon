@@ -33,7 +33,7 @@ func Load() *Config {
 		JWTSecret: getEnv("JWT_SECRET_KEY", "supersecretkey"),
 
 		STUNServers: strings.Split(
-			getEnv("STUN_SERVERS", "stun:stun.l.google.com:19302"),
+			getEnv("STUN_SERVERS", "stun:stun.sipnet.ru:3478"),
 			",",
 		),
 		TURNServer: getEnv("TURN_SERVER", ""),
