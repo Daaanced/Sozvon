@@ -34,7 +34,7 @@ func NewAuthHandler(cfg *config.Config, database *db.Database) *AuthHandler {
 		jwtService:     auth.NewJWTService(cfg.JWT.SecretKey, cfg.JWT.TokenDuration),
 		passwordHasher: auth.NewBcryptHasher(),
 		userService:    NewUserServiceClient(cfg.UserService),
-		chatService:    NewChatServiceClient(cfg.ChatService), // ← добавить
+		chatService:    NewChatServiceClient(cfg.ChatService),
 	}
 }
 
@@ -43,7 +43,7 @@ func (h *AuthHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/auth/register", h.Register).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", h.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/validate", h.ValidateToken).Methods("GET", "OPTIONS")
-	r.HandleFunc("/auth/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS") // ✅ ДОБАВИТЬ
+	r.HandleFunc("/auth/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
 }
 
 // Register обрабатывает регистрацию нового пользователя
@@ -111,7 +111,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерация JWT токена
-	token, err := h.jwtService.GenerateToken(req.Login, userID)
+	token, err := h.jwtService.GenerateToken(req.Login, userID, req.Login)
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "token_error", "Failed to generate token")
@@ -156,7 +156,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.jwtService.GenerateToken(user.Login, user.ID) // ← передаём user.ID
+	name, err := h.userService.GetUserName(ctx, user.Login)
+	if err != nil {
+		log.Printf("Warning: failed to get user name, using login: %v", err)
+		name = user.Login // fallback
+	}
+
+	token, err := h.jwtService.GenerateToken(user.Login, user.ID, name)
 	if err != nil {
 		log.Printf("Error generating token: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "token_error", "Failed to generate token")
@@ -194,6 +200,7 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		Status: "ok",
 		Data: map[string]interface{}{
 			"login":      claims.Login,
+			"name":       claims.Name,
 			"expires_at": claims.ExpiresAt.Time,
 		},
 	})

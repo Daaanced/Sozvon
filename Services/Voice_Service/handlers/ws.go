@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -104,8 +105,8 @@ func (h *VoiceWSHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &Session{
 		peerID:   uuid.NewString(),
-		userID:   claims.UserID,
-		username: claims.Username,
+		userID:   strconv.Itoa(claims.UserID),
+		username: claims.Name,
 		conn:     conn,
 		ctx:      ctx,
 		cancel:   cancel,

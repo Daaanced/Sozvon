@@ -61,8 +61,9 @@ type Peer struct {
 
 	closed bool
 
-	closeOnce sync.Once
-	renegCh   chan struct{}
+	closeOnce              sync.Once
+	renegCh                chan struct{}
+	initialNegotiationDone bool // защёлка: клиент уже прислал первый offer
 }
 
 func newPeer(id, userID, username, roomID string, pc *webrtc.PeerConnection) *Peer {
@@ -178,7 +179,14 @@ func (p *Peer) HandleOffer(sdp string) (string, error) {
 		return "", nil
 	}
 
-	return p.applyOffer(offer)
+	result, err := p.applyOffer(offer)
+	if err == nil && result != "" {
+		p.mu.Lock()
+		p.initialNegotiationDone = true
+		p.mu.Unlock()
+	}
+
+	return result, err
 }
 
 // applyOffer — применить offer и вернуть answer SDP
@@ -210,7 +218,9 @@ func (p *Peer) applyOffer(offer webrtc.SessionDescription) (string, error) {
 	}
 
 	<-gatherDone
-	return p.pc.LocalDescription().SDP, nil
+	sdp := p.pc.LocalDescription().SDP
+	log.Printf("[peer %s] applyOffer complete, answer SDP len=%d", p.ID, len(sdp))
+	return sdp, nil
 }
 
 // HandleAnswer — обрабатывает SDP answer от клиента (ответ на re-offer сервера)
@@ -249,6 +259,7 @@ func (p *Peer) HandleAnswer(sdp string) error {
 				return
 			}
 			if answerSDP != "" {
+				log.Printf("[peer %s] sending answer for buffered offer, len=%d", p.ID, len(answerSDP))
 				p.Send(signal.OutgoingMessage{
 					Type:    signal.TypeAnswer,
 					Payload: signal.SDPPayload{SDP: answerSDP},
@@ -302,8 +313,17 @@ func (p *Peer) SubscribeToTrack(publisherID string, remoteTrack *webrtc.TrackRem
 
 	p.localTracks[publisherID] = localTrack
 
-	// Re-offer — сообщаем клиенту о новом треке
-	go p.scheduleRenegotiate()
+	go func() {
+		p.mu.RLock()
+		ready := p.initialNegotiationDone
+		p.mu.RUnlock()
+		if ready {
+			// Re-offer — сообщаем клиенту о новом треке
+			p.scheduleRenegotiate()
+		}
+		// если не ready — рenegotiate случится сам когда клиент пришлёт offer
+		// и мы ответим answer уже со всеми треками
+	}()
 
 	return localTrack, nil
 }

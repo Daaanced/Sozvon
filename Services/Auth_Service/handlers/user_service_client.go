@@ -140,6 +140,37 @@ func (c *UserServiceClient) DeleteUserProfile(ctx context.Context, login string)
 	return nil
 }
 
+func (c *UserServiceClient) GetUserName(ctx context.Context, login string) (string, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"GET",
+		fmt.Sprintf("%s/users/%s", c.baseURL, login),
+		nil,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("user service returned status %d", resp.StatusCode)
+	}
+
+	var user struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return user.Name, nil
+}
+
 // HealthCheck проверяет доступность User Service
 func (c *UserServiceClient) HealthCheck(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(

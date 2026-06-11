@@ -47,19 +47,21 @@ func NewJWTService(secretKey []byte, duration time.Duration) *JWTService {
 // Claims структура для JWT claims
 type Claims struct {
 	Login  string `json:"login"`
-	UserID string `json:"user_id,omitempty"`
+	UserID int    `json:"user_id"`
+	Name   string `json:"name"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken создает JWT токен для пользователя
-func (s *JWTService) GenerateToken(login string, userID int) (string, error) {
+func (s *JWTService) GenerateToken(login string, userID int, name string) (string, error) {
 	if login == "" {
 		return "", errors.New("login cannot be empty")
 	}
 
 	claims := &Claims{
 		Login:  login,
-		UserID: fmt.Sprintf("%d", userID), // кладём user_id как строку
+		UserID: userID,
+		Name:   name,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.tokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

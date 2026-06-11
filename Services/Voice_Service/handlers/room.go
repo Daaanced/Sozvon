@@ -1,9 +1,11 @@
+// Voice_Service\handlers\room.go
 package handlers
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"Voice_Service/auth"
@@ -46,7 +48,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room, err := h.engine.CreateRoom(req.Name, userID)
+	room, err := h.engine.CreateRoom(req.Name, strconv.Itoa(userID))
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
@@ -77,15 +79,15 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *RoomHandler) userIDFromRequest(r *http.Request) (string, error) {
+func (h *RoomHandler) userIDFromRequest(r *http.Request) (int, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return "", fmt.Errorf("no authorization header")
+		return 0, fmt.Errorf("no authorization header")
 	}
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 	claims, err := h.jwtService.ValidateToken(tokenStr)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	return claims.UserID, nil
 }

@@ -28,7 +28,8 @@ func NewJWTService(secretKey []byte) *JWTService {
 // Claims структура для JWT claims
 type Claims struct {
 	Login  string `json:"login"`
-	UserID string `json:"user_id,omitempty"`
+	UserID int    `json:"user_id"`
+	Name   string `json:"name"`
 	jwt.RegisteredClaims
 }
 

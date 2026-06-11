@@ -85,8 +85,8 @@ func (h *ChatHandler) extractUserIDFromAuth(r *http.Request) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid token: %w", err)
 	}
-	userID, err := strconv.Atoi(claims.UserID)
-	if err != nil || userID == 0 {
+	userID := claims.UserID
+	if userID == 0 {
 		return 0, fmt.Errorf("invalid user_id in token")
 	}
 	return userID, nil

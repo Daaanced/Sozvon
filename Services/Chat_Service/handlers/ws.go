@@ -4,7 +4,6 @@ package handlers
 import (
 	"log"
 	"net/http"
-	"strconv"
 
 	"Chat_Service/ws"
 )
@@ -22,7 +21,7 @@ func (h *ChatHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.Atoi(claims.UserID)
+	userID := claims.UserID
 	if err != nil || userID == 0 {
 		http.Error(w, "invalid user_id in token", http.StatusUnauthorized)
 		return

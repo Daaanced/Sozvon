@@ -22,7 +22,8 @@ type JWTValidator interface {
 // Claims содержит данные из JWT токена
 type Claims struct {
 	Login  string
-	UserID string
+	UserID int
+	Name   string
 	jwt.RegisteredClaims
 }
 

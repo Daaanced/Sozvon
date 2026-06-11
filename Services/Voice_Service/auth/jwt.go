@@ -14,9 +14,9 @@ import (
 )
 
 type Claims struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	Login    string `json:"login"`
+	Login  string `json:"login"`
+	UserID int    `json:"user_id"`
+	Name   string `json:"name"`
 	jwt.RegisteredClaims
 }
 
@@ -48,13 +48,8 @@ func (s *JWTService) ValidateToken(tokenStr string) (*Claims, error) {
 		return nil, fmt.Errorf("token expired")
 	}
 
-	// Fallback: если UserID не заполнен — используем Login
-	// (зависит от того что кладёт Auth Service в токен)
-	if claims.UserID == "" {
-		claims.UserID = claims.Login
-	}
-	if claims.Username == "" {
-		claims.Username = claims.Login
+	if claims.Name == "" {
+		claims.Name = claims.Login
 	}
 
 	return claims, nil
