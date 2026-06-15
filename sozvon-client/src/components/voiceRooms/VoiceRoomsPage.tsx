@@ -30,12 +30,14 @@ export default function VoiceRoomsPage() {
   const {
     activeRoomId,
     peers,
-    muted,
+    // muted,
+    // deafened,
     callActive,
     connecting,
     joinRoom,
     leaveRoom,
-    toggleMute,
+    // toggleMute,
+    // toggleDeafen,
   } = useVoiceContext();
 
   // ── Загрузка комнат ──────────────────────────────────────────────────────
@@ -170,7 +172,7 @@ export default function VoiceRoomsPage() {
                 activeRoomId.slice(0, 8)}
             </span>
           </div>
-          <div style={s.callBarActions}>
+          {/* <div style={s.callBarActions}>
             <button
               style={{
                 ...s.callActionBtn,
@@ -187,7 +189,7 @@ export default function VoiceRoomsPage() {
             >
               📵 Leave
             </button>
-          </div>
+          </div> */}
         </div>
       )}
 
@@ -285,6 +287,7 @@ function PeerBadge({ peer, live }: { peer: PeerInfo; live?: boolean }) {
     <div style={s.peerBadge}>
       <div style={avatarStyle}>{firstLetter}</div>
       <span style={s.peerName}>{displayName}</span>
+      {peer.deafened && <span title="Deafened">🧱</span>}
       {peer.muted && <span title="Muted">🔇</span>}
       {live && !peer.muted && <span title="Speaking">🎙️</span>}
     </div>

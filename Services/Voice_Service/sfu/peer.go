@@ -40,8 +40,9 @@ type Peer struct {
 	pc   *webrtc.PeerConnection
 	send chan signal.OutgoingMessage // WS handler читает из этого канала
 
-	mu    sync.RWMutex
-	muted bool
+	mu       sync.RWMutex
+	muted    bool
+	deafened bool
 
 	// publishTrack — трек который этот peer шлёт на сервер (входящий для нас)
 	// Nil до тех пор пока клиент не начнёт публиковать аудио

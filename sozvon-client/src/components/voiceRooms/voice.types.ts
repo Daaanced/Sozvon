@@ -14,6 +14,7 @@ export interface PeerInfo {
   user_id: string;
   username: string;
   muted: boolean;
+  deafened: boolean;
 }
 
 export interface VoiceEvents {
@@ -21,6 +22,7 @@ export interface VoiceEvents {
   onPeerJoined?: (peer: PeerInfo) => void;
   onPeerLeft?: (peerId: string) => void;
   onPeerMuted?: (peerId: string, muted: boolean) => void;
+  onPeerDeafened?: (peerId: string, deafened: boolean) => void;
   onTrack?: (peerId: string, stream: MediaStream) => void;
   onError?: (code: string, message: string) => void;
   onConnected?: () => void;

@@ -17,7 +17,15 @@ export default function Sidebar() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const { activeRoomName, leaveRoom } = useVoiceContext();
+  // Деструктурировать из контекста
+  const {
+    activeRoomName,
+    leaveRoom,
+    toggleMute,
+    muted,
+    deafened,
+    toggleDeafen,
+  } = useVoiceContext();
 
   const isRooms = location.pathname === "/app/rooms";
 
@@ -168,8 +176,26 @@ export default function Sidebar() {
         </div>
 
         <div style={styles.meButtons}>
-          <button style={styles.iconBtn}>🎙️</button>
-          <button style={styles.iconBtn}>🎧</button>
+          <button
+            style={{
+              ...styles.iconBtn,
+              background: muted ? "#fee2e2" : undefined,
+            }}
+            onClick={toggleMute}
+            title={muted ? "Unmute" : "Mute"}
+          >
+            🎙️
+          </button>
+          <button
+            style={{
+              ...styles.iconBtn,
+              background: deafened ? "#fee2e2" : undefined,
+            }}
+            onClick={toggleDeafen}
+            title={deafened ? "Undeafen" : "Deafen"}
+          >
+            🎧
+          </button>
           <button style={styles.iconBtn} onClick={() => setOpen(true)}>
             ⚙️
           </button>

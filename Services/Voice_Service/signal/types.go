@@ -77,6 +77,7 @@ type PeerInfo struct {
 	UserID   string `json:"user_id"`
 	Username string `json:"username"`
 	Muted    bool   `json:"muted"`
+	deafened bool   `json:"deafened"`
 }
 
 type PeerJoinedPayload struct {
