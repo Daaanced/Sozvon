@@ -238,6 +238,24 @@ func (r *Room) BroadcastMute(senderID string, muted bool) {
 	}
 }
 
+func (r *Room) BroadcastDeafened(senderID string, deafened bool) {
+	r.mu.RLock()
+	peers := r.peersExcept(senderID)
+	r.mu.RUnlock()
+
+	msg := signal.OutgoingMessage{
+		Type: signal.TypePeerDeafened,
+		Payload: signal.PeerDeafenedPayload{
+			PeerID:   senderID,
+			Deafened: deafened,
+		},
+	}
+
+	for _, p := range peers {
+		p.Send(msg)
+	}
+}
+
 // GetPeer — найти peer по ID
 func (r *Room) GetPeer(peerID string) (*Peer, bool) {
 	r.mu.RLock()

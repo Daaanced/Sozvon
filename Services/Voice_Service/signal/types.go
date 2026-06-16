@@ -52,6 +52,10 @@ type MutePayload struct {
 	Muted bool `json:"muted"`
 }
 
+type DeafenedPayload struct {
+	Deafened bool `json:"deafened"`
+}
+
 // SetLayerPayload — для simulcast: клиент говорит какой слой хочет получать
 // от конкретного участника. Пока не реализовано, но тип заложен.
 type SetLayerPayload struct {
@@ -77,7 +81,7 @@ type PeerInfo struct {
 	UserID   string `json:"user_id"`
 	Username string `json:"username"`
 	Muted    bool   `json:"muted"`
-	deafened bool   `json:"deafened"`
+	Deafened bool   `json:"deafened"`
 }
 
 type PeerJoinedPayload struct {
@@ -93,6 +97,11 @@ type PeerMutedPayload struct {
 	Muted  bool   `json:"muted"`
 }
 
+type PeerDeafenedPayload struct {
+	PeerID   string `json:"peer_id"`
+	Deafened bool   `json:"deafened"`
+}
+
 type ErrorPayload struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -106,16 +115,18 @@ const (
 	TypeAnswer       = "answer"
 	TypeICECandidate = "ice_candidate"
 	TypeMute         = "mute"
+	TypeDeafened     = "deafened"
 	TypeSetLayer     = "set_layer"
 )
 
 // Константы типов исходящих сообщений
 const (
-	TypeRoomState  = "room_state"
-	TypePeerJoined = "peer_joined"
-	TypePeerLeft   = "peer_left"
-	TypePeerMuted  = "peer_muted"
-	TypeError      = "error"
+	TypeRoomState    = "room_state"
+	TypePeerJoined   = "peer_joined"
+	TypePeerLeft     = "peer_left"
+	TypePeerMuted    = "peer_muted"
+	TypePeerDeafened = "peer_deafened"
+	TypeError        = "error"
 )
 
 // Коды ошибок

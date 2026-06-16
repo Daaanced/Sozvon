@@ -6,6 +6,7 @@ import { useState } from "react";
 import SettingsModal from "./SettingsModal";
 import CreateGroupModal from "./CreateGroupModal";
 import { useVoiceContext } from "../context/VoiceContext";
+import { s } from "./voiceRooms/voice.styles";
 
 export default function Sidebar() {
   const { chats, myId, myLogin, me, getSafeUser, unread } = useChatContext();
@@ -20,6 +21,8 @@ export default function Sidebar() {
   // Деструктурировать из контекста
   const {
     activeRoomName,
+    callActive,
+    connecting,
     leaveRoom,
     toggleMute,
     muted,
@@ -141,8 +144,25 @@ export default function Sidebar() {
       {activeRoomName && (
         <div style={styles.voicePanel}>
           <div>
-            <div style={styles.voiceTitle}>🔊 Voice connected</div>
-
+            <div style={s.voiceStatus}>
+              <span>
+                {connecting
+                  ? "Connecting... "
+                  : callActive
+                    ? "Connected "
+                    : "In room "}
+              </span>
+              <span
+                style={{
+                  ...s.statusDot,
+                  background: connecting
+                    ? "#facc15"
+                    : callActive
+                      ? "#4ade80"
+                      : "#9ca3af",
+                }}
+              />
+            </div>
             <div style={styles.voiceRoom}>{activeRoomName}</div>
           </div>
 

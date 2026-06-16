@@ -167,7 +167,8 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   // Новая функция toggleDeafen
   function toggleDeafen() {
     const next = !deafened;
-    deafenedRef.current = next;
+
+    voiceClient.setDeafened(next);
     setDeafened(next);
 
     // Применяем ко всем существующим audio элементам

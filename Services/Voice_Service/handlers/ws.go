@@ -207,6 +207,9 @@ func (h *VoiceWSHandler) dispatch(s *Session, msg signal.IncomingMessage) {
 	case signal.TypeSetLayer:
 		h.handleSetLayer(s, msg.Payload)
 
+	case signal.TypeDeafened:
+		h.handleDeafened(s, msg.Payload)
+
 	default:
 		log.Printf("[ws] unknown message type: %s peer=%s", msg.Type, s.peerID)
 	}
@@ -386,6 +389,34 @@ func (h *VoiceWSHandler) handleMute(s *Session, raw json.RawMessage) {
 		return
 	}
 	room.BroadcastMute(s.peerID, payload.Muted)
+}
+
+func (h *VoiceWSHandler) handleDeafened(s *Session, raw json.RawMessage) {
+	s.mu.Lock()
+	peer := s.peer
+	s.mu.Unlock()
+
+	if peer == nil {
+		return
+	}
+
+	var payload signal.DeafenedPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return
+	}
+
+	peer.SetMuted(payload.Deafened)
+
+	// Разослать изменение остальным в комнате
+	roomID, ok := h.engine.PeerRoom(s.peerID)
+	if !ok {
+		return
+	}
+	room, ok := h.engine.GetRoom(roomID)
+	if !ok {
+		return
+	}
+	room.BroadcastDeafened(s.peerID, payload.Deafened)
 }
 
 func (h *VoiceWSHandler) handleLeave(s *Session) {

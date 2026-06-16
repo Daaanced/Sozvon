@@ -19,17 +19,7 @@ export const s: Record<string, React.CSSProperties> = {
   headerIcon: { fontSize: 28 },
   headerTitle: { fontWeight: 700, fontSize: 18, color: "#111827" },
   headerSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  createBtn: {
-    padding: "7px 14px",
-    background: "#111827",
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-    transition: "opacity 0.15s",
-  },
+
   createRow: {
     display: "flex",
     gap: 8,
@@ -192,4 +182,36 @@ export const s: Record<string, React.CSSProperties> = {
     color: "#065f46",
   },
   peerName: { fontSize: 13, color: "#374151", fontWeight: 500 },
+
+  headerActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+  },
+
+  createBtn: {
+    padding: "7px 14px",
+    background: "#374151",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 600,
+    transition: "opacity 0.15s",
+  },
+
+  refreshBtn: {
+    width: 29,
+    height: 29,
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    background: "#374151",
+    color: "#fff",
+    fontSize: 16,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 };

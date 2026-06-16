@@ -142,11 +142,23 @@ func (p *Peer) SetMuted(muted bool) {
 	p.mu.Unlock()
 }
 
+func (p *Peer) SetDeafened(deafened bool) {
+	p.mu.Lock()
+	p.deafened = deafened
+	p.mu.Unlock()
+}
+
 // Muted — получить mute статус
 func (p *Peer) Muted() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.muted
+}
+
+func (p *Peer) Deafened() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.deafened
 }
 
 // Info — снимок состояния для отправки клиентам
@@ -158,6 +170,7 @@ func (p *Peer) Info() signal.PeerInfo {
 		UserID:   p.UserID,
 		Username: p.Username,
 		Muted:    p.muted,
+		Deafened: p.deafened,
 	}
 }
 

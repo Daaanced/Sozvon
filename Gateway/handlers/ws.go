@@ -58,7 +58,7 @@ func routeMessage(data []byte) targetService {
 
 	// Известные типы сигнализации WebRTC
 	switch envelope.Type {
-	case "join", "leave", "offer", "answer", "ice_candidate", "mute", "set_layer":
+	case "join", "leave", "offer", "answer", "ice_candidate", "mute", "deafened", "set_layer":
 		return serviceVoice
 	}
 

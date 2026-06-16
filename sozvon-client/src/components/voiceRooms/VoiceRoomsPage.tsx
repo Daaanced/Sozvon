@@ -5,6 +5,7 @@ import { getRooms, createRoom, deleteRoom } from "../../api/voice";
 import { RoomInfo, PeerInfo } from "./voice.types";
 import { s } from "./voice.styles";
 import { useVoiceContext } from "../../context/VoiceContext";
+import { useChatContext } from "../../context/ChatContext";
 // ── Logger ─────────────────────────────────────────────────────────────────
 
 const log = {
@@ -25,19 +26,16 @@ export default function VoiceRoomsPage() {
   const [newRoomName, setNewRoomName] = useState("");
   const [creating, setCreating] = useState(false);
   const [showCreateInput, setShowCreateInput] = useState(false);
-
+  const { me } = useChatContext();
   // Текущая комната и участники
   const {
     activeRoomId,
-    peers,
-    // muted,
-    // deafened,
-    callActive,
     connecting,
-    joinRoom,
+    muted,
+    deafened,
     leaveRoom,
-    // toggleMute,
-    // toggleDeafen,
+    joinRoom,
+    peers,
   } = useVoiceContext();
 
   // ── Загрузка комнат ──────────────────────────────────────────────────────
@@ -58,7 +56,7 @@ export default function VoiceRoomsPage() {
   useEffect(() => {
     fetchRooms();
     // Периодически обновляем список чтобы видеть новых участников
-    const interval = setInterval(fetchRooms, 8000);
+    const interval = setInterval(fetchRooms, 300000);
     return () => clearInterval(interval);
   }, [fetchRooms]);
 
@@ -97,6 +95,19 @@ export default function VoiceRoomsPage() {
     }
   };
 
+  const livePeers = activeRoomId
+    ? [
+        {
+          peer_id: String(me!.id),
+          user_id: String(me!.id),
+          username: me!.name,
+          muted,
+          deafened,
+        },
+        ...peers,
+      ]
+    : peers;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -112,12 +123,23 @@ export default function VoiceRoomsPage() {
             </div>
           </div>
         </div>
-        <button
-          style={s.createBtn}
-          onClick={() => setShowCreateInput((v) => !v)}
-        >
-          {showCreateInput ? "✕" : "+ New Room"}
-        </button>
+        <div style={s.headerActions}>
+          <button
+            style={s.refreshBtn}
+            onClick={fetchRooms}
+            disabled={loading}
+            title="Refresh rooms"
+          >
+            🔄
+          </button>
+
+          <button
+            style={s.createBtn}
+            onClick={() => setShowCreateInput((v) => !v)}
+          >
+            {showCreateInput ? "✕" : "+ New Room"}
+          </button>
+        </div>
       </div>
 
       {/* Create room input */}
@@ -147,49 +169,6 @@ export default function VoiceRoomsPage() {
           <button style={s.errorClose} onClick={() => setError("")}>
             ✕
           </button>
-        </div>
-      )}
-
-      {/* Active call bar */}
-      {activeRoomId && (
-        <div style={s.callBar}>
-          <div style={s.callBarLeft}>
-            <span
-              style={{
-                ...s.statusDot,
-                background: callActive ? "#4ade80" : "#facc15",
-              }}
-            />
-            <span style={s.callBarText}>
-              {connecting
-                ? "Connecting..."
-                : callActive
-                  ? "Connected"
-                  : "In room"}
-            </span>
-            <span style={s.callBarRoom}>
-              {rooms.find((r) => r.id === activeRoomId)?.name ??
-                activeRoomId.slice(0, 8)}
-            </span>
-          </div>
-          {/* <div style={s.callBarActions}>
-            <button
-              style={{
-                ...s.callActionBtn,
-                background: muted ? "#ef4444" : "#374151",
-              }}
-              onClick={toggleMute}
-              title={muted ? "Unmute" : "Mute"}
-            >
-              {muted ? "🔇" : "🎙️"}
-            </button>
-            <button
-              style={{ ...s.callActionBtn, background: "#dc2626" }}
-              onClick={leaveRoom}
-            >
-              📵 Leave
-            </button>
-          </div> */}
         </div>
       )}
 
@@ -242,19 +221,10 @@ export default function VoiceRoomsPage() {
                   </div>
                 </div>
 
-                {/* Участники комнаты */}
-                {room.peers && room.peers.length > 0 && (
-                  <div style={s.peersList}>
-                    {room.peers.map((peer) => (
-                      <PeerBadge key={peer.peer_id} peer={peer} />
-                    ))}
-                  </div>
-                )}
-
                 {/* Живые участники (из WS событий) при активной комнате */}
-                {isActive && peers.length > 0 && (
+                {isActive && livePeers.length > 0 && (
                   <div style={s.peersList}>
-                    {peers.map((peer) => (
+                    {livePeers.map((peer) => (
                       <PeerBadge key={peer.peer_id} peer={peer} live />
                     ))}
                   </div>

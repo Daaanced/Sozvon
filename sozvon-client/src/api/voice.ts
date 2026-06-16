@@ -140,6 +140,13 @@ class VoiceClient {
     return this.localStream.getAudioTracks().every((t) => !t.enabled);
   }
 
+  setDeafened(deafened: boolean) {
+    sendWS({
+      type: "deafened",
+      payload: { deafened },
+    });
+  }
+
   // setPreferredLayer — выбрать simulcast слой (для будущего видео)
   setPreferredLayer(peerId: string, layer: "low" | "medium" | "high") {
     sendWS({
@@ -235,6 +242,7 @@ class VoiceClient {
       "peer_joined",
       "peer_left",
       "peer_muted",
+      "peer_deafened",
       "offer",
       "answer",
       "ice_candidate",
@@ -259,6 +267,10 @@ class VoiceClient {
 
       case "peer_muted":
         this.events.onPeerMuted?.(msg.payload.peer_id, msg.payload.muted);
+        break;
+
+      case "peer_deafened":
+        this.events.onPeerDeafened?.(msg.payload.peer_id, msg.payload.deafened);
         break;
 
       // Re-offer от сервера (когда добавился новый участник)
