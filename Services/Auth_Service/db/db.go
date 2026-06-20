@@ -38,14 +38,14 @@ func NewDatabase(cfg config.DatabaseConfig) (*Database, error) {
 
 	log.Println("DSN:", dsn)
 
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
 	row := db.QueryRow("SELECT current_database()")
 	var currentDB string
 	row.Scan(&currentDB)
 	log.Println("Connected to database:", currentDB)
-
-	if err := db.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
 
 	return &Database{db: db}, nil
 }

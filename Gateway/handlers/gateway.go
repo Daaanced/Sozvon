@@ -46,23 +46,24 @@ func NewGatewayHandler(cfg *config.Config) *GatewayHandler {
 // RegisterRoutes регистрирует все маршруты Gateway
 func (h *GatewayHandler) RegisterRoutes(r *mux.Router) {
 	// Auth Service
-	r.PathPrefix("/auth/").HandlerFunc(h.proxyToAuth)
+	r.PathPrefix("/api/auth/").HandlerFunc(h.proxyToAuth)
 
 	// User Service
-	r.PathPrefix("/users/").HandlerFunc(h.proxyToUsers)
+	r.PathPrefix("/api/users/").HandlerFunc(h.proxyToUsers)
+	r.PathPrefix("/api/static/").HandlerFunc(h.proxyToUsers)
 
 	// Chat Service
-	r.PathPrefix("/chats").HandlerFunc(h.proxyToChats)
-	r.PathPrefix("/media/").HandlerFunc(h.proxyToMedia)
+	r.PathPrefix("/api/chats").HandlerFunc(h.proxyToChats)
+	r.PathPrefix("/api/media/").HandlerFunc(h.proxyToMedia)
 
 	// WebSocket
 	r.HandleFunc("/ws", h.wsHandler.HandleWebSocket)
 
 	r.HandleFunc("/ws/voice", h.wsHandler.HandleVoiceWebSocket)
-	r.PathPrefix("/voice/").HandlerFunc(h.proxyToVoice)
+	r.PathPrefix("/api/voice/").HandlerFunc(h.proxyToVoice)
 
 	// Health check
-	r.HandleFunc("/health", h.healthCheck).Methods("GET")
+	r.HandleFunc("/api/health", h.healthCheck).Methods("GET")
 }
 
 // proxyToAuth проксирует запросы к Auth Service

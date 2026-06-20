@@ -39,20 +39,26 @@ type CORSConfig struct {
 	AllowedHeaders   []string
 }
 
-// Load загружает конфигурацию из переменных окружения с fallback на дефолтные значения
+// Load загружает конфигурацию из переменных окружения с fallback на дефолтные значения.
+// В Docker дефолты указывают на имена сервисов из docker-compose.yml.
 func Load() (*Config, error) {
 	return &Config{
 		Server: ServerConfig{
+			// Gateway слушает на :8080 внутри контейнера;
+			// наружу он не проксируется напрямую — nginx обращается к нему по имени,
+			// но в текущей схеме nginx сам является точкой входа,
+			// а Gateway — промежуточный слой маршрутизации к сервисам.
 			Address:      getEnv("SERVER_ADDRESS", ":8080"),
 			ReadTimeout:  getDurationEnv("READ_TIMEOUT", 15*time.Second),
 			WriteTimeout: getDurationEnv("WRITE_TIMEOUT", 15*time.Second),
 			IdleTimeout:  getDurationEnv("IDLE_TIMEOUT", 60*time.Second),
 		},
 		Services: ServicesConfig{
-			AuthServiceURL:  getEnv("AUTH_SERVICE_URL", "http://localhost:8082"),
-			UserServiceURL:  getEnv("USER_SERVICE_URL", "http://localhost:8083"),
-			ChatServiceURL:  getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
-			VoiceServiceURL: getEnv("VOICE_SERVICE_URL", "http://localhost:8085"),
+			// Имена хостов = названия сервисов в docker-compose.yml
+			AuthServiceURL:  getEnv("AUTH_SERVICE_URL", "http://auth-service:8082"),
+			UserServiceURL:  getEnv("USER_SERVICE_URL", "http://user-service:8083"),
+			ChatServiceURL:  getEnv("CHAT_SERVICE_URL", "http://chat-service:8084"),
+			VoiceServiceURL: getEnv("VOICE_SERVICE_URL", "http://voice-service:8085"),
 		},
 		JWT: JWTConfig{
 			SecretKey: []byte(getEnv("JWT_SECRET_KEY", "supersecretkey")),
@@ -63,7 +69,9 @@ func Load() (*Config, error) {
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"*"},
 		},
-		StaticDir: getEnv("STATIC_DIR", "../Services/User_Service/static/"),
+		// Статика отдаётся через user-service или nginx напрямую,
+		// локальный путь нужен только при запуске вне Docker
+		StaticDir: getEnv("STATIC_DIR", "/static"),
 	}, nil
 }
 

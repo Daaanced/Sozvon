@@ -202,7 +202,7 @@ func (c *UserServiceClient) HealthCheck(ctx context.Context) error {
 func createUserProfile(login string) error {
 	ctx := context.Background()
 	cfg := config.UserServiceConfig{
-		URL:     "http://localhost:8083",
+		URL:     "http://user-service:8083",
 		Timeout: 10 * time.Second,
 	}
 	client := NewUserServiceClient(cfg)

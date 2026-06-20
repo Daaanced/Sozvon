@@ -31,16 +31,16 @@ func main() {
 	roomHandler := handlers.NewRoomHandler(cfg, sfuEngine)
 
 	// REST — управление комнатами
-	r.HandleFunc("/voice/rooms", roomHandler.ListRooms).Methods("GET")
-	r.HandleFunc("/voice/rooms", roomHandler.CreateRoom).Methods("POST")
-	r.HandleFunc("/voice/rooms/{roomID}", roomHandler.GetRoom).Methods("GET")
-	r.HandleFunc("/voice/rooms/{roomID}", roomHandler.DeleteRoom).Methods("DELETE")
+	r.HandleFunc("/api/voice/rooms", roomHandler.ListRooms).Methods("GET")
+	r.HandleFunc("/api/voice/rooms", roomHandler.CreateRoom).Methods("POST")
+	r.HandleFunc("/api/voice/rooms/{roomID}", roomHandler.GetRoom).Methods("GET")
+	r.HandleFunc("/api/voice/rooms/{roomID}", roomHandler.DeleteRoom).Methods("DELETE")
 
 	// WS — сигнализация (gateway проксирует сюда /ws/voice)
 	r.HandleFunc("/ws", wsHandler.Handle)
 
 	// Health
-	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","service":"voice"}`))
 	}).Methods("GET")

@@ -436,7 +436,7 @@ func (h *WebSocketHandler) connectToVoiceService(token string) (*websocket.Conn,
 func (h *WebSocketHandler) getServiceHost(serviceURL string) string {
 	u, err := url.Parse(serviceURL)
 	if err != nil {
-		return "localhost:8085"
+		return "voice-service:8085"
 	}
 	return u.Host
 }

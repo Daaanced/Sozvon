@@ -49,18 +49,18 @@ func main() {
 	//r.Use(middleware.CORS(cfg.CORS))
 
 	// Статические файлы
-	staticPath := cfg.Static.Directory
-	r.PathPrefix("/static/").Handler(
-		http.StripPrefix("/static/",
-			http.FileServer(http.Dir(staticPath)),
-		),
-	)
+	// staticPath := cfg.Static.Directory
+	// r.PathPrefix("/static/").Handler(
+	// 	http.StripPrefix("/static/",
+	// 		http.FileServer(http.Dir(staticPath)),
+	// 	),
+	// )
 
 	// Регистрация маршрутов
 	userHandler.RegisterRoutes(r)
 
 	// Health check
-	r.HandleFunc("/health", healthCheck).Methods("GET")
+	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
 	// HTTP сервер
 	srv := &http.Server{

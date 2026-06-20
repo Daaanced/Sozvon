@@ -36,15 +36,26 @@ func NewUserHandler(cfg *config.Config, database *db.Database) *UserHandler {
 
 // RegisterRoutes регистрирует маршруты для пользователей
 func (h *UserHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/users", h.GetUsers).Methods("GET", "OPTIONS")
-	r.HandleFunc("/users/search", h.SearchUsers).Methods("GET", "OPTIONS")
-	r.HandleFunc("/users/id/{id}", h.GetUserByID).Methods("GET", "OPTIONS")
-	r.HandleFunc("/users/{login}", h.GetUser).Methods("GET", "OPTIONS")
-	r.HandleFunc("/users", h.CreateUser).Methods("POST", "OPTIONS")
-	r.HandleFunc("/users/{login}", h.UpdateUser).Methods("PUT", "OPTIONS")
-	r.HandleFunc("/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
-	r.HandleFunc("/users/{login}/avatar", h.UploadAvatar).Methods("POST", "OPTIONS")
-	r.HandleFunc("/users/{login}/avatar", h.DeleteAvatar).Methods("DELETE", "OPTIONS")
+	r.HandleFunc("/api/users", h.GetUsers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/users/search", h.SearchUsers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/users/id/{id}", h.GetUserByID).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/users/{login}", h.GetUser).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/users", h.CreateUser).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/users/{login}", h.UpdateUser).Methods("PUT", "OPTIONS")
+	r.HandleFunc("/api/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
+	r.HandleFunc("/api/users/{login}/avatar", h.UploadAvatar).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/users/{login}/avatar", h.DeleteAvatar).Methods("DELETE", "OPTIONS")
+
+	h.registerStaticRoutes(r)
+}
+
+func (h *UserHandler) registerStaticRoutes(r *mux.Router) {
+	staticPath := h.config.Static.Directory
+	r.PathPrefix("/api/static/").Handler(
+		http.StripPrefix("/api/static/",
+			http.FileServer(http.Dir(staticPath)),
+		),
+	)
 }
 
 // GetUsers получает список всех пользователей с пагинацией

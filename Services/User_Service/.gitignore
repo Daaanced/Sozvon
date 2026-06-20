@@ -3,3 +3,5 @@
 static/avatars/*
 
 !static/avatars/default.png
+!static/avatars/deleted.png
+!static/avatars/group_default.png

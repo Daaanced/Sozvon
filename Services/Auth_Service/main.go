@@ -57,7 +57,7 @@ func main() {
 	authHandler.RegisterRoutes(r)
 
 	// Health check
-	r.HandleFunc("/health", healthCheck).Methods("GET")
+	r.HandleFunc("/api/health", healthCheck).Methods("GET")
 
 	// HTTP сервер
 	srv := &http.Server{

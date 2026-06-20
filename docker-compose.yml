@@ -1,0 +1,207 @@
+version: "3.9"
+
+networks:
+  sozvon-net:
+    driver: bridge
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  pg_auth:
+  pg_user:
+  pg_chat:
+
+services:
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # PostgreSQL — отдельный инстанс для каждого сервиса
+  # ════════════════════════════════════════════════════════════════════════════
+  db-auth:
+    image: postgres:16-alpine
+    container_name: db-auth
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       authdb
+      POSTGRES_USER:     auth_user
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
+    volumes:
+      - pg_auth:/var/lib/postgresql/data
+    networks:
+      - sozvon-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d authdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-user:
+    image: postgres:16-alpine
+    container_name: db-user
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       userdb
+      POSTGRES_USER:     user_user
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD:-secret}
+    volumes:
+      - pg_user:/var/lib/postgresql/data
+    networks:
+      - sozvon-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-chat:
+    image: postgres:16-alpine
+    container_name: db-chat
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       chatdb
+      POSTGRES_USER:     chat_user
+      POSTGRES_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
+    volumes:
+      - pg_chat:/var/lib/postgresql/data
+    networks:
+      - sozvon-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chatdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Go-сервисы
+  # ════════════════════════════════════════════════════════════════════════════
+
+  voice-service:
+    build:
+      context: ./Services/Voice_Service
+      dockerfile: Dockerfile
+    container_name: voice-service
+    restart: unless-stopped
+    environment:
+      # WebRTC STUN/TURN — переопределяется в .env при необходимости
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.sipnet.ru:3478}
+      TURN_SERVER:  ${TURN_SERVER:-}
+      TURN_USER:    ${TURN_USER:-}
+      TURN_PASS:    ${TURN_PASS:-}
+      APP_PORT:     8085
+    expose:
+      - "8085"
+    networks:
+      - sozvon-net
+
+  user-service:
+    build:
+      context: ./Services/User_Service
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    environment:
+      DB_HOST:     db-user
+      DB_PORT:     5432
+      DB_NAME:     userdb
+      DB_USER:     user_user
+      DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
+      APP_PORT:    8083
+    expose:
+      - "8083"
+    depends_on:
+      db-user:
+        condition: service_healthy
+    networks:
+      - sozvon-net
+
+  chat-service:
+    build:
+      context: ./Services/Chat_Service
+      dockerfile: Dockerfile
+    container_name: chat-service
+    restart: unless-stopped
+    environment:
+      DB_HOST:     db-chat
+      DB_PORT:     5432
+      DB_NAME:     chatdb
+      DB_USER:     chat_user
+      DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
+      APP_PORT:    8084
+    expose:
+      - "8084"
+    depends_on:
+      db-chat:
+        condition: service_healthy
+    networks:
+      - sozvon-net
+
+  auth-service:
+    build:
+      context: ./Services/Auth_Service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      DB_HOST:     db-auth
+      DB_PORT:     5432
+      DB_NAME:     authdb
+      DB_USER:     auth_user
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
+      JWT_SECRET:  ${JWT_SECRET:-changeme}
+      APP_PORT:    8082
+    expose:
+      - "8082"
+    depends_on:
+      db-auth:
+        condition: service_healthy
+    networks:
+      - sozvon-net
+      
+  gateway:
+    build:
+      context: ./Gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    expose:
+      - "8080"
+    environment:
+      SERVER_ADDRESS:    ":8080"
+      AUTH_SERVICE_URL:  "http://auth-service:8082"
+      USER_SERVICE_URL:  "http://user-service:8083"
+      CHAT_SERVICE_URL:  "http://chat-service:8084"
+      VOICE_SERVICE_URL: "http://voice-service:8085"
+      JWT_SECRET_KEY:    ${JWT_SECRET}
+    networks:
+      - sozvon-net
+
+  nginx:
+    build:
+      context: ./Gateway
+      dockerfile: Dockerfile.nginx
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - C:/nginx-certs:/etc/nginx/certs:ro
+    depends_on:
+      - gateway
+      - client
+      - auth-service
+      - user-service
+      - chat-service
+      - voice-service
+    networks:
+      - sozvon-net
+  # ════════════════════════════════════════════════════════════════════════════
+  # React-клиент (production build)
+  # ════════════════════════════════════════════════════════════════════════════
+  client:
+    build:
+      context: ./sozvon-client
+      dockerfile: Dockerfile
+    container_name: sozvon-client
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - sozvon-net

@@ -37,9 +37,9 @@ func main() {
 	gatewayHandler.RegisterRoutes(r)
 
 	// Статические файлы
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/",
-		http.FileServer(http.Dir(cfg.StaticDir)),
-	))
+	// r.PathPrefix("/api/static/").Handler(http.StripPrefix("/static/",
+	// 	http.FileServer(http.Dir(cfg.StaticDir)),
+	// ))
 
 	// CORS
 	c := cors.New(cors.Options{

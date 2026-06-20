@@ -51,28 +51,28 @@ func (h *ChatHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/ws", h.HandleWebSocket)
 
 	// Чаты
-	r.HandleFunc("/chats/create", h.CreateChat).Methods("POST", "OPTIONS")
-	r.HandleFunc("/chats/forward", h.ForwardMessages).Methods("POST", "OPTIONS")
-	r.HandleFunc("/chats", h.GetChats).Methods("GET", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}", h.GetChatInfo).Methods("GET", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/read", h.MarkRead).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats/create", h.CreateChat).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats/forward", h.ForwardMessages).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats", h.GetChats).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}", h.GetChatInfo).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/read", h.MarkRead).Methods("POST", "OPTIONS")
 
 	// Сообщения
-	r.HandleFunc("/chats/{chatId}/messages/before", h.GetMessagesBefore).Methods("GET", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages/after", h.GetMessagesAfter).Methods("GET", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages", h.SendMessage).Methods("POST", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages/{messageId}/context", h.GetMessagesContext).Methods("GET", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages/{messageId}", h.EditMessage).Methods("PUT", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages/{messageId}", h.DeleteMessage).Methods("DELETE", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/upload", h.UploadFiles).Methods("POST", "OPTIONS")
-	r.HandleFunc("/chats/{chatId}/messages/unread", h.GetUnreadMessages).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages/before", h.GetMessagesBefore).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages/after", h.GetMessagesAfter).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages", h.GetMessages).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages", h.SendMessage).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages/{messageId}/context", h.GetMessagesContext).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages/{messageId}", h.EditMessage).Methods("PUT", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages/{messageId}", h.DeleteMessage).Methods("DELETE", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/upload", h.UploadFiles).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/chats/{chatId}/messages/unread", h.GetUnreadMessages).Methods("GET", "OPTIONS")
 
 	// Медиа
-	r.HandleFunc("/media/{filename}", h.ServeMedia).Methods("GET")
+	r.HandleFunc("/api/media/{filename}", h.ServeMedia).Methods("GET")
 
 	// Internal
-	r.HandleFunc("/internal/members/{userId}", h.DeleteMembersByUserID).Methods("DELETE")
+	r.HandleFunc("/api/internal/members/{userId}", h.DeleteMembersByUserID).Methods("DELETE")
 }
 
 func (h *ChatHandler) extractUserIDFromAuth(r *http.Request) (int, error) {

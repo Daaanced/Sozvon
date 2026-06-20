@@ -40,10 +40,10 @@ func NewAuthHandler(cfg *config.Config, database *db.Database) *AuthHandler {
 
 // RegisterRoutes регистрирует маршруты для аутентификации
 func (h *AuthHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/auth/register", h.Register).Methods("POST", "OPTIONS")
-	r.HandleFunc("/auth/login", h.Login).Methods("POST", "OPTIONS")
-	r.HandleFunc("/auth/validate", h.ValidateToken).Methods("GET", "OPTIONS")
-	r.HandleFunc("/auth/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
+	r.HandleFunc("/api/auth/register", h.Register).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/auth/login", h.Login).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/auth/validate", h.ValidateToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/auth/users/{login}", h.DeleteUser).Methods("DELETE", "OPTIONS")
 }
 
 // Register обрабатывает регистрацию нового пользователя

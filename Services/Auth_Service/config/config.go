@@ -84,11 +84,11 @@ func Load() (*Config, error) {
 			RefreshEnabled: getBoolEnv("JWT_REFRESH_ENABLED", false),
 		},
 		UserService: UserServiceConfig{
-			URL:     getEnv("USER_SERVICE_URL", "http://localhost:8083"),
+			URL:     getEnv("USER_SERVICE_URL", "http://user-service:8083"),
 			Timeout: getDurationEnv("USER_SERVICE_TIMEOUT", 10*time.Second),
 		},
 		ChatService: ChatServiceConfig{
-			URL:     getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
+			URL:     getEnv("CHAT_SERVICE_URL", "http://chat-service:8084"),
 			Timeout: getDurationEnv("CHAT_SERVICE_TIMEOUT", 10*time.Second),
 		},
 		CORS: CORSConfig{
