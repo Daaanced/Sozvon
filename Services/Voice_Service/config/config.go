@@ -1,3 +1,5 @@
+// voice_service/config/config.go
+
 package config
 
 import (
@@ -18,6 +20,7 @@ type Config struct {
 	TURNUser    string
 	TURNPass    string
 
+	PublicIP string
 	// UDP диапазон портов для WebRTC медиапотоков
 	UDPPortMin uint16
 	UDPPortMax uint16
@@ -40,6 +43,7 @@ func Load() *Config {
 		TURNUser:   getEnv("TURN_USER", ""),
 		TURNPass:   getEnv("TURN_PASS", ""),
 
+		PublicIP:   os.Getenv("PUBLIC_IP"),
 		UDPPortMin: uint16(getIntEnv("UDP_PORT_MIN", 10000)),
 		UDPPortMax: uint16(getIntEnv("UDP_PORT_MAX", 10200)),
 

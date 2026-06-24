@@ -33,6 +33,7 @@ type DatabaseConfig struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
+	DumpPath        string
 }
 
 type JWTConfig struct {
@@ -77,6 +78,7 @@ func Load() (*Config, error) {
 			MaxOpenConns:    getIntEnv("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:    getIntEnv("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getDurationEnv("DB_CONN_MAX_LIFETIME", 5*time.Minute),
+			DumpPath:        getEnv("DUMP_PATH", "db/authdb_dump.sql"),
 		},
 		JWT: JWTConfig{
 			SecretKey:      []byte(getEnv("JWT_SECRET_KEY", "supersecretkey")),

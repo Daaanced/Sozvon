@@ -1,6 +1,7 @@
 *.exe
 
 static/avatars/*
+db/*.sql
 
 !static/avatars/default.png
 !static/avatars/deleted.png

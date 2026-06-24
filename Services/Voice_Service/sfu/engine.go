@@ -16,6 +16,7 @@ import (
 	"Voice_Service/config"
 
 	"github.com/google/uuid"
+	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )
@@ -43,6 +44,14 @@ func NewEngine(cfg *config.Config) *Engine {
 	if err := s.SetEphemeralUDPPortRange(cfg.UDPPortMin, cfg.UDPPortMax); err != nil {
 		log.Fatalf("[sfu] set UDP port range: %v", err)
 	}
+
+	if cfg.PublicIP != "" {
+		s.SetNAT1To1IPs([]string{cfg.PublicIP}, webrtc.ICECandidateTypeHost)
+	}
+
+	// ✅ Отключаем mDNS — в докере/продакшне он бесполезен
+	// и только мешает, генерируя .local кандидаты
+	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 
 	// Включаем поддержку simulcast (для будущего видео)
 	// При текущей реализации (только аудио) не влияет на поведение

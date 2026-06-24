@@ -1,3 +1,5 @@
+# Sozvon\Services\Voice_Service\Dockerfile
+
 # ─── Stage 1: build ───────────────────────────────────────────────────────────
 FROM golang:1.26.4-alpine AS builder
 
@@ -27,5 +29,6 @@ COPY --from=builder /app/service .
 
 # Порт переопределяется через ENV в docker-compose
 EXPOSE 8080
+EXPOSE 10000-10200/udp
 
 ENTRYPOINT ["./service"]

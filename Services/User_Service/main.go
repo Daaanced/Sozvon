@@ -33,7 +33,7 @@ func main() {
 	defer database.Close()
 
 	// Миграции
-	if err := database.Migrate(); err != nil {
+	if err := database.Migrate(cfg.Database); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
@@ -47,14 +47,6 @@ func main() {
 	r.Use(middleware.Logging)
 	r.Use(middleware.Recovery)
 	//r.Use(middleware.CORS(cfg.CORS))
-
-	// Статические файлы
-	// staticPath := cfg.Static.Directory
-	// r.PathPrefix("/static/").Handler(
-	// 	http.StripPrefix("/static/",
-	// 		http.FileServer(http.Dir(staticPath)),
-	// 	),
-	// )
 
 	// Регистрация маршрутов
 	userHandler.RegisterRoutes(r)

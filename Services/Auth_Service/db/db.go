@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"Auth_Service/config"
@@ -58,7 +59,7 @@ func (d *Database) Close() error {
 }
 
 // ✅ УЛУЧШЕННАЯ МИГРАЦИЯ с проверкой существующей структуры
-func (d *Database) Migrate() error {
+func (d *Database) Migrate(cfg config.DatabaseConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -129,6 +130,10 @@ func (d *Database) Migrate() error {
 		log.Println("✅ Users table created successfully")
 	} else {
 		log.Println("✅ Users table already exists with correct structure")
+	}
+
+	if err := d.SeedFromDump(cfg.DumpPath); err != nil {
+		return err
 	}
 
 	return nil
@@ -224,4 +229,33 @@ func (d *Database) DeleteUser(ctx context.Context, login string) error {
 
 func (d *Database) GetDB() *sql.DB {
 	return d.db
+}
+
+func (d *Database) SeedFromDump(dumpPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Проверяем, есть ли уже пользователи
+	var count int
+	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to count users: %w", err)
+	}
+
+	if count > 0 {
+		log.Println("users table already contains data, skipping dump import")
+		return nil
+	}
+
+	sqlBytes, err := os.ReadFile(dumpPath)
+	if err != nil {
+		return fmt.Errorf("failed to read dump file: %w", err)
+	}
+
+	if _, err := d.db.ExecContext(ctx, string(sqlBytes)); err != nil {
+		return fmt.Errorf("failed to execute dump: %w", err)
+	}
+
+	log.Printf("database seeded from dump: %s\n", dumpPath)
+	return nil
 }

@@ -1,3 +1,5 @@
+# Sozvon\Services\Chat_Service\Dockerfile
+
 # ─── Stage 1: build ───────────────────────────────────────────────────────────
 FROM golang:1.26.4-alpine AS builder
 
@@ -25,6 +27,7 @@ WORKDIR /app
 
 COPY --from=builder /app/service .
 COPY --from=builder /app/Media ./Media
+COPY --from=builder /app/db ./db
 
 # Порт переопределяется через ENV в docker-compose
 EXPOSE 8080

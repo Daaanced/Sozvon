@@ -1,4 +1,4 @@
-version: "3.9"
+# Sozvon\docker-compose.yml
 
 networks:
   sozvon-net:
@@ -16,7 +16,7 @@ services:
   # PostgreSQL — отдельный инстанс для каждого сервиса
   # ════════════════════════════════════════════════════════════════════════════
   db-auth:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     container_name: db-auth
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
       POSTGRES_USER:     auth_user
       POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
     volumes:
-      - pg_auth:/var/lib/postgresql/data
+      - pg_auth:/var/lib/postgresql
     networks:
       - sozvon-net
     healthcheck:
@@ -34,7 +34,7 @@ services:
       retries: 5
 
   db-user:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     container_name: db-user
     restart: unless-stopped
     environment:
@@ -42,7 +42,7 @@ services:
       POSTGRES_USER:     user_user
       POSTGRES_PASSWORD: ${USER_DB_PASSWORD:-secret}
     volumes:
-      - pg_user:/var/lib/postgresql/data
+      - pg_user:/var/lib/postgresql
     networks:
       - sozvon-net
     healthcheck:
@@ -52,7 +52,7 @@ services:
       retries: 5
 
   db-chat:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     container_name: db-chat
     restart: unless-stopped
     environment:
@@ -60,7 +60,7 @@ services:
       POSTGRES_USER:     chat_user
       POSTGRES_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
     volumes:
-      - pg_chat:/var/lib/postgresql/data
+      - pg_chat:/var/lib/postgresql
     networks:
       - sozvon-net
     healthcheck:
@@ -85,7 +85,12 @@ services:
       TURN_SERVER:  ${TURN_SERVER:-}
       TURN_USER:    ${TURN_USER:-}
       TURN_PASS:    ${TURN_PASS:-}
+      PUBLIC_IP:    92.127.186.38
       APP_PORT:     8085
+      UDP_PORT_MIN: 10000
+      UDP_PORT_MAX: 10200
+    ports:
+      - "10000-10200:10000-10200/udp"
     expose:
       - "8085"
     networks:
@@ -190,6 +195,44 @@ services:
       - user-service
       - chat-service
       - voice-service
+    networks:
+      - sozvon-net
+
+  backup:
+    image: postgres:18.4-alpine
+    container_name: backup
+    restart: unless-stopped
+    environment:
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
+      CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
+    volumes:
+      - ./backups:/backup
+    command: |
+      sh -c '
+        while true; do
+          PGPASSWORD=$AUTH_DB_PASSWORD pg_dump -h db-auth -U auth_user -d authdb -a --inserts \
+            | grep -v "\\restrict" \
+            | grep -v "\\unrestrict" \
+            > /backup/authdb_$(date +%Y%m%d_%H%M%S).sql
+
+          PGPASSWORD=$USER_DB_PASSWORD pg_dump -h db-user -U user_user -d userdb -a --inserts \
+            | grep -v "\\restrict" \
+            | grep -v "\\unrestrict" \
+            > /backup/userdb_$(date +%Y%m%d_%H%M%S).sql
+
+          PGPASSWORD=$CHAT_DB_PASSWORD pg_dump -h db-chat -U chat_user -d chatdb -a --inserts \
+            | grep -v "\\restrict" \
+            | grep -v "\\unrestrict" \
+            > /backup/chatdb_$(date +%Y%m%d_%H%M%S).sql
+
+          sleep 21600
+        done
+      '
+    depends_on:
+      - db-auth
+      - db-user
+      - db-chat
     networks:
       - sozvon-net
   # ════════════════════════════════════════════════════════════════════════════

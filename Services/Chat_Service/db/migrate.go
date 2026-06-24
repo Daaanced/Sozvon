@@ -3,13 +3,15 @@
 package db
 
 import (
+	"Chat_Service/config"
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
-func (d *Database) Migrate() error {
+func (d *Database) Migrate(cfg config.DatabaseConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -24,27 +26,27 @@ func (d *Database) Migrate() error {
 	queries := []string{
 		// Сначала таблицы, которые ни на что не ссылаются
 		`CREATE TABLE IF NOT EXISTS chats (
-            id         UUID      PRIMARY KEY,
-            active     BOOLEAN   NOT NULL DEFAULT FALSE,
-            type       TEXT      NOT NULL DEFAULT 'direct',
-            name       TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        );`,
+			id         UUID      PRIMARY KEY,
+			active     BOOLEAN   NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			type       TEXT      NOT NULL DEFAULT 'direct',
+			name       TEXT 
+		);`,
 
 		// messages до chat_members (так как chat_members ссылается на messages)
 		`CREATE TABLE IF NOT EXISTS messages (
-            id               UUID      PRIMARY KEY,
-            chat_id          UUID      REFERENCES chats(id) ON DELETE CASCADE,
-            sender_id        INTEGER   NOT NULL,
-            text             TEXT      NOT NULL DEFAULT '',
-            reply_to_id      UUID      REFERENCES messages(id) ON DELETE SET NULL,
-            forwarded_sender_id        INTEGER,
-            forwarded_text             TEXT,
-            forwarded_from_message_id  UUID,
-            edited_at        TIMESTAMP,
-            deleted_at       TIMESTAMP,
-            created_at       TIMESTAMP NOT NULL DEFAULT NOW()
-        );`,
+			id                         UUID      PRIMARY KEY,
+			chat_id                    UUID      REFERENCES chats(id) ON DELETE CASCADE,
+			sender_id                  INTEGER   NOT NULL,
+			text                       TEXT      NOT NULL DEFAULT '',
+			created_at                 TIMESTAMP NOT NULL DEFAULT NOW(), -- Перенесено на 5-е место
+			reply_to_id                UUID      REFERENCES messages(id) ON DELETE SET NULL,
+			forwarded_sender_id        INTEGER,
+			forwarded_text             TEXT,
+			forwarded_from_message_id  UUID,
+			edited_at                  TIMESTAMP,
+			deleted_at                 TIMESTAMP
+		);`,
 
 		// Теперь chat_members (messages уже существует)
 		`CREATE TABLE IF NOT EXISTS chat_members (
@@ -105,6 +107,39 @@ func (d *Database) Migrate() error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	if err := d.SeedFromDump(cfg.DumpPath); err != nil {
+		return err
+	}
+
 	log.Println("✅ Database migration completed successfully")
+	return nil
+}
+
+func (d *Database) SeedFromDump(dumpPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Проверяем, есть ли уже пользователи
+	var count int
+	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chats").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to count chats: %w", err)
+	}
+
+	if count > 0 {
+		log.Println("chats table already contains data, skipping dump import")
+		return nil
+	}
+
+	sqlBytes, err := os.ReadFile(dumpPath)
+	if err != nil {
+		return fmt.Errorf("failed to read dump file: %w", err)
+	}
+
+	if _, err := d.db.ExecContext(ctx, string(sqlBytes)); err != nil {
+		return fmt.Errorf("failed to execute dump: %w", err)
+	}
+
+	log.Printf("database seeded from dump: %s\n", dumpPath)
 	return nil
 }

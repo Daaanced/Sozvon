@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"User_Service/config"
@@ -58,7 +59,7 @@ func (d *Database) Close() error {
 }
 
 // Migrate выполняет миграции базы данных
-func (d *Database) Migrate() error {
+func (d *Database) Migrate(cfg config.DatabaseConfig) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
@@ -80,6 +81,10 @@ func (d *Database) Migrate() error {
 
 	if _, err := d.db.ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	if err := d.SeedFromDump(cfg.DumpPath); err != nil {
+		return err
 	}
 
 	return nil
@@ -424,4 +429,34 @@ func UpdateUser(u models.User) error {
 		u.Name, u.Email, u.Info, u.Picture, u.Login,
 	)
 	return err
+}
+
+// SeedFromDump загружает данные из SQL-дампа
+func (d *Database) SeedFromDump(dumpPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Проверяем, есть ли уже пользователи
+	var count int
+	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to count users: %w", err)
+	}
+
+	if count > 0 {
+		log.Println("users table already contains data, skipping dump import")
+		return nil
+	}
+
+	sqlBytes, err := os.ReadFile(dumpPath)
+	if err != nil {
+		return fmt.Errorf("failed to read dump file: %w", err)
+	}
+
+	if _, err := d.db.ExecContext(ctx, string(sqlBytes)); err != nil {
+		return fmt.Errorf("failed to execute dump: %w", err)
+	}
+
+	log.Printf("database seeded from dump: %s\n", dumpPath)
+	return nil
 }
