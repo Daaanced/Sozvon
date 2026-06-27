@@ -118,7 +118,7 @@ func (c *UserServiceClient) DeleteUserProfile(ctx context.Context, login string)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"DELETE",
-		fmt.Sprintf("%s/users/%s", c.baseURL, login),
+		fmt.Sprintf("%s/api/users/%s", c.baseURL, login),
 		nil,
 	)
 	if err != nil {
@@ -144,7 +144,7 @@ func (c *UserServiceClient) GetUserName(ctx context.Context, login string) (stri
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"GET",
-		fmt.Sprintf("%s/users/%s", c.baseURL, login),
+		fmt.Sprintf("%s/api/users/%s", c.baseURL, login),
 		nil,
 	)
 	if err != nil {

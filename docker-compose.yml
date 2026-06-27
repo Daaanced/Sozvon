@@ -179,7 +179,7 @@ services:
 
   nginx:
     build:
-      context: ./Gateway
+      context: ./nginx
       dockerfile: Dockerfile.nginx
     container_name: nginx
     restart: unless-stopped
@@ -187,7 +187,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - C:/nginx-certs:/etc/nginx/certs:ro
+      - /root/Sozvon/nginx/nginx-certs:/etc/nginx/certs:ro
     depends_on:
       - gateway
       - client
@@ -198,46 +198,6 @@ services:
     networks:
       - sozvon-net
 
-  backup:
-    image: postgres:18.4-alpine
-    container_name: backup
-    restart: unless-stopped
-    environment:
-      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
-      USER_DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
-      CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
-    volumes:
-      - ./backups:/backup
-    command: |
-      sh -c '
-        while true; do
-          PGPASSWORD=$AUTH_DB_PASSWORD pg_dump -h db-auth -U auth_user -d authdb -a --inserts \
-            | grep -v "\\restrict" \
-            | grep -v "\\unrestrict" \
-            > /backup/authdb_$(date +%Y%m%d_%H%M%S).sql
-
-          PGPASSWORD=$USER_DB_PASSWORD pg_dump -h db-user -U user_user -d userdb -a --inserts \
-            | grep -v "\\restrict" \
-            | grep -v "\\unrestrict" \
-            > /backup/userdb_$(date +%Y%m%d_%H%M%S).sql
-
-          PGPASSWORD=$CHAT_DB_PASSWORD pg_dump -h db-chat -U chat_user -d chatdb -a --inserts \
-            | grep -v "\\restrict" \
-            | grep -v "\\unrestrict" \
-            > /backup/chatdb_$(date +%Y%m%d_%H%M%S).sql
-
-          sleep 21600
-        done
-      '
-    depends_on:
-      - db-auth
-      - db-user
-      - db-chat
-    networks:
-      - sozvon-net
-  # ════════════════════════════════════════════════════════════════════════════
-  # React-клиент (production build)
-  # ════════════════════════════════════════════════════════════════════════════
   client:
     build:
       context: ./sozvon-client
@@ -248,3 +208,44 @@ services:
       - "3000"
     networks:
       - sozvon-net
+
+  #backup:
+  #  image: postgres:18.4-alpine
+  #  container_name: backup
+  #  restart: unless-stopped
+  #  environment:
+  #    AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
+  #    USER_DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
+  #    CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
+  #  volumes:
+  #    - ./backups:/backup
+  #  command: |
+  #    sh -c '
+  #      while true; do
+  #        PGPASSWORD=$AUTH_DB_PASSWORD pg_dump -h db-auth -U auth_user -d authdb -a --inserts \
+  #          | grep -v "\\restrict" \
+  #          | grep -v "\\unrestrict" \
+  #          > /backup/authdb_$(date +%Y%m%d_%H%M%S).sql
+  
+  #        PGPASSWORD=$USER_DB_PASSWORD pg_dump -h db-user -U user_user -d userdb -a --inserts \
+  #          | grep -v "\\restrict" \
+  #          | grep -v "\\unrestrict" \
+  #          > /backup/userdb_$(date +%Y%m%d_%H%M%S).sql
+
+  #        PGPASSWORD=$CHAT_DB_PASSWORD pg_dump -h db-chat -U chat_user -d chatdb -a --inserts \
+  #          | grep -v "\\restrict" \
+  #          | grep -v "\\unrestrict" \
+  #          > /backup/chatdb_$(date +%Y%m%d_%H%M%S).sql
+
+  #        sleep 21600
+  #      done
+  #    '
+  #  depends_on:
+  #    - db-auth
+  #    - db-user
+  #    - db-chat
+  #  networks:
+  #    - sozvon-net
+  # ════════════════════════════════════════════════════════════════════════════
+  # React-клиент (production build)
+  # ════════════════════════════════════════════════════════════════════════════

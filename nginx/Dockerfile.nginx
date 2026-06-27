@@ -1,3 +1,5 @@
+# Sozvon\nginx\Dockerfile.nginx
+
 # Gateway — nginx reverse proxy
 FROM nginx:1.27-alpine
 

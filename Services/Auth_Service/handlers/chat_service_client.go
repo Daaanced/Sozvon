@@ -36,7 +36,7 @@ func (c *ChatServiceClient) DeleteChatMembersByUserID(ctx context.Context, userI
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"DELETE",
-		fmt.Sprintf("%s/internal/members/%d", c.baseURL, userID),
+		fmt.Sprintf("%s/api/internal/members/%d", c.baseURL, userID),
 		nil,
 	)
 	if err != nil {
