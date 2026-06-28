@@ -1,8 +1,7 @@
 // sozvon-client/src/api/chats.ts
 import { requestAuth } from "./http";
 import { PendingFile } from "../components/chat/chat.types";
-
-const API_URL = "https://zvonya.ru/api";
+import { API_URL } from "./http";
 
 export function createChat(toUserId: number) {
   return requestAuth("/chats/create", {

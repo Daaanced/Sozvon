@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { getUserById, searchUser, User } from "../api/users";
 import { onWSMessage } from "../services/ws";
 import { getChats, markRead } from "../api/chats";
+import { API_URL } from "../api/http";
 
 type Chat = {
   chatId: string;
@@ -38,7 +39,7 @@ export const DELETED_USER: User = {
   name: "Deleted",
   email: "-",
   info: "-",
-  picture: "https://zvonya.ru/api/static/avatars/deleted.png",
+  picture: `${API_URL}/static/avatars/deleted.png`,
   created_at: "-",
   updated_at: "-",
 };

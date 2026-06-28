@@ -132,6 +132,13 @@ func (d *Database) Migrate(cfg config.DatabaseConfig) error {
 		log.Println("✅ Users table already exists with correct structure")
 	}
 
+	if _, err := os.Stat(cfg.DumpPath); os.IsNotExist(err) {
+		log.Println("⚠️ Dump file not found, skipping seed")
+		return nil // или продолжаем без ошибки
+	} else if err != nil {
+		return fmt.Errorf("failed to check dump file: %w", err)
+	}
+
 	if err := d.SeedFromDump(cfg.DumpPath); err != nil {
 		return err
 	}

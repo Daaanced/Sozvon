@@ -7,6 +7,7 @@ import SettingsModal from "./SettingsModal";
 import CreateGroupModal from "./CreateGroupModal";
 import { useVoiceContext } from "../context/VoiceContext";
 import { s } from "./voiceRooms/voice.styles";
+import { API_URL } from "../api/http";
 
 export default function Sidebar() {
   const { chats, myId, myLogin, me, getSafeUser, unread } = useChatContext();
@@ -106,7 +107,7 @@ export default function Sidebar() {
                       : DELETED_USER.name;
                   })();
               const displayPicture = isGroup
-                ? "https://zvonya.ru/api/static/avatars/group_default.png"
+                ? `${API_URL}/static/avatars/group_default.png`
                 : (() => {
                     const withId = chat.members.find((m) => m !== myId);
                     return withId

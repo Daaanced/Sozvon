@@ -1,4 +1,6 @@
 //sozvon-client\src\components\UserSearchResult.tsx
+import { API_URL } from "../api/http";
+
 type Props = {
   login: string;
   picture: string;
@@ -47,7 +49,7 @@ export default function UserSearchResult({
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src =
-              "https://zvonya.ru/api/static/avatars/default.png";
+              `${API_URL}/static/avatars/default.png;`
           }}
         />
       </div>

@@ -1,5 +1,5 @@
 //sozvon-client\src\api\http.ts
-const API_URL = "https://zvonya.ru/api";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080/api";
 
 export async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(API_URL + path, {

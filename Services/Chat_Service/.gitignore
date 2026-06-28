@@ -1,4 +1,4 @@
 *.exe
-
+Chat_Service
 db/*.sql
 Media/*

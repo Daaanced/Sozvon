@@ -1,3 +1,4 @@
+# Sozvon/sozvon-client/Dockerfile
 # ─── Stage 1: build React ─────────────────────────────────────────────────────
 FROM node:24-alpine AS builder
 

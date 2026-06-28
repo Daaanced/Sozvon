@@ -14,6 +14,7 @@ import ForwardModal from "./ForwardModal";
 import EditModal from "./EditModal";
 import { styles } from "./chat.styles";
 import { Message } from "./chat.types";
+import { API_URL } from "../../api/http";
 
 type Props = { chatId: string };
 
@@ -82,7 +83,7 @@ export default function Chat({ chatId }: Props) {
   const groupInfo = isGroup
     ? {
         name: chat?.name ?? "Групповой чат",
-        picture: "https://zvonya.ru/api/static/avatars/group_default.png",
+        picture: `${API_URL}/static/avatars/group_default.png`,
       }
     : null;
 

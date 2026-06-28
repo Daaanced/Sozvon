@@ -1,6 +1,7 @@
 // sozvon-client/src/services/ws.ts
 
 //import { parseToken } from '../functions/parse'
+const WS_URL = import.meta.env.VITE_WS_URL ?? "ws://localhost:8080/ws";
 
 let socket: WebSocket | null = null;
 let listeners: ((msg: any) => void)[] = [];
@@ -18,7 +19,7 @@ export function disconnectWS() {
 export function connectWS(token: string) {
   if (socket) return;
 
-  socket = new WebSocket(`wss://zvonya.ru/ws?token=${token}`);
+  socket = new WebSocket(`${WS_URL}?token=${token}`);
 
   socket.onopen = () => {
     console.log("[WS] connected");

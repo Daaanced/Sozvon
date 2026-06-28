@@ -1,5 +1,5 @@
 *.exe
-
+User_Service
 static/avatars/*
 db/*.sql
 

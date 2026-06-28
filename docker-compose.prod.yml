@@ -1,4 +1,4 @@
-# Sozvon\docker-compose.yml
+# Sozvon\docker-compose.prod.yml
 
 networks:
   sozvon-net:
@@ -15,56 +15,56 @@ services:
   # ════════════════════════════════════════════════════════════════════════════
   # PostgreSQL — отдельный инстанс для каждого сервиса
   # ════════════════════════════════════════════════════════════════════════════
-  db-auth:
+  auth-db:
     image: postgres:18.4-alpine
-    container_name: db-auth
+    container_name: auth-db
     restart: unless-stopped
     environment:
       POSTGRES_DB:       authdb
-      POSTGRES_USER:     auth_user
+      POSTGRES_USER:     user
       POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
     volumes:
       - pg_auth:/var/lib/postgresql
     networks:
       - sozvon-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auth_user -d authdb"]
+      test: ["CMD-SHELL", "pg_isready -U user -d authdb"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  db-user:
+  user-db:
     image: postgres:18.4-alpine
-    container_name: db-user
+    container_name: user-db
     restart: unless-stopped
     environment:
       POSTGRES_DB:       userdb
-      POSTGRES_USER:     user_user
+      POSTGRES_USER:     user
       POSTGRES_PASSWORD: ${USER_DB_PASSWORD:-secret}
     volumes:
       - pg_user:/var/lib/postgresql
     networks:
       - sozvon-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user_user -d userdb"]
+      test: ["CMD-SHELL", "pg_isready -U user -d userdb"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  db-chat:
+  chat-db:
     image: postgres:18.4-alpine
-    container_name: db-chat
+    container_name: chat-db
     restart: unless-stopped
     environment:
       POSTGRES_DB:       chatdb
-      POSTGRES_USER:     chat_user
+      POSTGRES_USER:     user
       POSTGRES_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
     volumes:
       - pg_chat:/var/lib/postgresql
     networks:
       - sozvon-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chat_user -d chatdb"]
+      test: ["CMD-SHELL", "pg_isready -U user -d chatdb"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -85,7 +85,7 @@ services:
       TURN_SERVER:  ${TURN_SERVER:-}
       TURN_USER:    ${TURN_USER:-}
       TURN_PASS:    ${TURN_PASS:-}
-      PUBLIC_IP:    92.127.186.38
+      PUBLIC_IP:    ${GLOBAL_IP:-}
       APP_PORT:     8085
       UDP_PORT_MIN: 10000
       UDP_PORT_MAX: 10200
@@ -103,16 +103,16 @@ services:
     container_name: user-service
     restart: unless-stopped
     environment:
-      DB_HOST:     db-user
+      DB_HOST:     user-db
       DB_PORT:     5432
       DB_NAME:     userdb
-      DB_USER:     user_user
+      DB_USER:     user
       DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
       APP_PORT:    8083
     expose:
       - "8083"
     depends_on:
-      db-user:
+      user-db:
         condition: service_healthy
     networks:
       - sozvon-net
@@ -124,16 +124,16 @@ services:
     container_name: chat-service
     restart: unless-stopped
     environment:
-      DB_HOST:     db-chat
+      DB_HOST:     chat-db
       DB_PORT:     5432
       DB_NAME:     chatdb
-      DB_USER:     chat_user
+      DB_USER:     user
       DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
       APP_PORT:    8084
     expose:
       - "8084"
     depends_on:
-      db-chat:
+      chat-db:
         condition: service_healthy
     networks:
       - sozvon-net
@@ -145,17 +145,17 @@ services:
     container_name: auth-service
     restart: unless-stopped
     environment:
-      DB_HOST:     db-auth
+      DB_HOST:     auth-db
       DB_PORT:     5432
       DB_NAME:     authdb
-      DB_USER:     auth_user
+      DB_USER:     user
       DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
       JWT_SECRET:  ${JWT_SECRET:-changeme}
       APP_PORT:    8082
     expose:
       - "8082"
     depends_on:
-      db-auth:
+      auth-db:
         condition: service_healthy
     networks:
       - sozvon-net
@@ -198,10 +198,17 @@ services:
     networks:
       - sozvon-net
 
+  # ════════════════════════════════════════════════════════════════════════════
+  # React-клиент (production build)
+  # ════════════════════════════════════════════════════════════════════════════
+  
   client:
     build:
       context: ./sozvon-client
       dockerfile: Dockerfile
+    args:
+      VITE_API_URL: https://zvonya.ru/api
+      VITE_WS_URL: wss://zvonya.ru/ws
     container_name: sozvon-client
     restart: unless-stopped
     expose:
@@ -246,6 +253,3 @@ services:
   #    - db-chat
   #  networks:
   #    - sozvon-net
-  # ════════════════════════════════════════════════════════════════════════════
-  # React-клиент (production build)
-  # ════════════════════════════════════════════════════════════════════════════
