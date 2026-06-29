@@ -31,7 +31,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d authdb"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 1
 
   user-db:
     image: postgres:18.4-alpine
@@ -49,7 +49,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d userdb"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 1
 
   chat-db:
     image: postgres:18.4-alpine
@@ -67,7 +67,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user -d chatdb"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 1
 
   # ════════════════════════════════════════════════════════════════════════════
   # Go-сервисы
@@ -81,7 +81,7 @@ services:
     restart: unless-stopped
     environment:
       # WebRTC STUN/TURN — переопределяется в .env при необходимости
-      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.l.google.com:19302}
+      STUN_SERVERS: ${STUN_SERVERS:-stun:stun.sipnet.ru:3478}
       TURN_SERVER:  ${TURN_SERVER:-}
       TURN_USER:    ${TURN_USER:-}
       TURN_PASS:    ${TURN_PASS:-}
@@ -108,6 +108,7 @@ services:
       DB_USER:     user
       DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
       APP_PORT:    8083
+      BACKEND_URL: http://${GLOBAL_IP:-LOCAL_IP}:8080/api
     ports:
       - "8083:8083"
     depends_on:
@@ -129,6 +130,8 @@ services:
       DB_USER:     user
       DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
       APP_PORT:    8084
+      JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
+      MEDIA_BASE_URL: http://${GLOBAL_IP:-LOCAL_IP}:8080/api
     ports:
       - "8084:8084"
     depends_on:
@@ -149,7 +152,7 @@ services:
       DB_NAME:     authdb
       DB_USER:     user
       DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
-      JWT_SECRET:  ${JWT_SECRET:-changeme}
+      JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
       APP_PORT:    8082
     ports:
       - "8082:8082"
@@ -194,5 +197,5 @@ services:
         - ./sozvon-client:/app          # Монтируем исходники
         - /app/node_modules             # Сохраняем node_modules в контейнере
       environment:
-        - VITE_API_URL=http://${LOCAL_IP:-localhost}:8080/api
-        - VITE_WS_URL=ws://${LOCAL_IP:-localhost}:8080/ws
+        - VITE_API_URL=http://${GLOBAL_IP:-LOCAL_IP}:8080/api
+        - VITE_WS_URL=ws://${GLOBAL_IP:-LOCAL_IP}:8080/ws

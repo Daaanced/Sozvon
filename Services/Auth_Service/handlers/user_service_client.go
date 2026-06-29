@@ -88,7 +88,7 @@ func (c *UserServiceClient) createUserProfileAttempt(ctx context.Context, jsonBo
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
-		c.baseURL+"/users",
+		c.baseURL+"/api/users",
 		bytes.NewBuffer(jsonBody),
 	)
 	if err != nil {
