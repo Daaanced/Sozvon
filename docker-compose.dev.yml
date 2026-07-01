@@ -9,6 +9,7 @@ volumes:
   pg_auth:
   pg_user:
   pg_chat:
+  client_node_modules:
 
 services:
 
@@ -85,7 +86,8 @@ services:
       TURN_SERVER:  ${TURN_SERVER:-}
       TURN_USER:    ${TURN_USER:-}
       TURN_PASS:    ${TURN_PASS:-}
-      PUBLIC_IP:    ${GLOBAL_IP:-}
+      PUBLIC_IP:    ${GLOBAL_IP:-${LOCAL_IP}}
+      JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
       APP_PORT:     8085
       UDP_PORT_MIN: 10000
       UDP_PORT_MAX: 10200
@@ -108,7 +110,7 @@ services:
       DB_USER:     user
       DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
       APP_PORT:    8083
-      BACKEND_URL: http://${GLOBAL_IP:-LOCAL_IP}:8080/api
+      BACKEND_URL: http://${GLOBAL_IP:-${LOCAL_IP}}:8080/api
     ports:
       - "8083:8083"
     depends_on:
@@ -131,7 +133,7 @@ services:
       DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
       APP_PORT:    8084
       JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
-      MEDIA_BASE_URL: http://${GLOBAL_IP:-LOCAL_IP}:8080/api
+      MEDIA_BASE_URL: http://${GLOBAL_IP:-${LOCAL_IP}}:8080/api
     ports:
       - "8084:8084"
     depends_on:
@@ -195,7 +197,7 @@ services:
         - sozvon-net
       volumes:
         - ./sozvon-client:/app          # Монтируем исходники
-        - /app/node_modules             # Сохраняем node_modules в контейнере
+        - client_node_modules:/app/node_modules             # Сохраняем node_modules в контейнере
       environment:
-        - VITE_API_URL=http://${GLOBAL_IP:-LOCAL_IP}:8080/api
-        - VITE_WS_URL=ws://${GLOBAL_IP:-LOCAL_IP}:8080/ws
+        - VITE_API_URL=http://${GLOBAL_IP:-${LOCAL_IP}}:8080/api
+        - VITE_WS_URL=ws://${GLOBAL_IP:-${LOCAL_IP}}:8080/ws

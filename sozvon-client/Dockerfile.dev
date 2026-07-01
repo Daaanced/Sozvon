@@ -1,12 +1,12 @@
 # Sozvon/sozvon-client/Dockerfile.dev
 
-FROM node:24-alpine
+FROM node:24-alpine3.24
 
 WORKDIR /app
 
 # Копируем package.json и устанавливаем зависимости
-COPY package.json package-lock.json* yarn.lock* ./
-RUN npm ci
+COPY package.json ./
+RUN npm install
 
 # Копируем исходники
 COPY . .
