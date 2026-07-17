@@ -2,10 +2,18 @@
 # ─── Stage 1: build React ─────────────────────────────────────────────────────
 FROM node:24-alpine AS builder
 
+# Объявляем аргументы, которые придут из docker-compose
+ARG VITE_API_URL
+ARG VITE_WS_URL
+
+# Превращаем их в ENV переменные, чтобы они были доступны Vite во время сборки
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+
 WORKDIR /app
 
 COPY package.json package-lock.json* yarn.lock* ./
-RUN npm ci --prefer-offline
+RUN npm install --prefer-offline
 
 COPY . .
 RUN npm run build

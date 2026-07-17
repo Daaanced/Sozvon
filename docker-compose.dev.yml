@@ -12,7 +12,6 @@ volumes:
   client_node_modules:
 
 services:
-
   # ════════════════════════════════════════════════════════════════════════════
   # PostgreSQL — отдельный инстанс для каждого сервиса
   # ════════════════════════════════════════════════════════════════════════════
@@ -113,6 +112,8 @@ services:
       BACKEND_URL: http://${GLOBAL_IP:-${LOCAL_IP}}:8080/api
     ports:
       - "8083:8083"
+    volumes:
+      - ./Services/User_Service/static/avatars:/app/static/avatars
     depends_on:
       user-db:
         condition: service_healthy
@@ -136,6 +137,8 @@ services:
       MEDIA_BASE_URL: http://${GLOBAL_IP:-${LOCAL_IP}}:8080/api
     ports:
       - "8084:8084"
+    volumes:
+      - ./Services/Chat_Service/Media:/app/Media
     depends_on:
       chat-db:
         condition: service_healthy

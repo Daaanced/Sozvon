@@ -9,6 +9,7 @@ volumes:
   pg_auth:
   pg_user:
   pg_chat:
+  client_node_modules:
 
 services:
 
@@ -74,6 +75,7 @@ services:
   # ════════════════════════════════════════════════════════════════════════════
 
   voice-service:
+    image: daaanced/sozvon:voice-latest
     build:
       context: ./Services/Voice_Service
       dockerfile: Dockerfile
@@ -86,6 +88,7 @@ services:
       TURN_USER:    ${TURN_USER:-}
       TURN_PASS:    ${TURN_PASS:-}
       PUBLIC_IP:    ${GLOBAL_IP:-}
+      JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
       APP_PORT:     8085
       UDP_PORT_MIN: 10000
       UDP_PORT_MAX: 10200
@@ -97,6 +100,7 @@ services:
       - sozvon-net
 
   user-service:
+    image: daaanced/sozvon:user-latest
     build:
       context: ./Services/User_Service
       dockerfile: Dockerfile
@@ -109,8 +113,11 @@ services:
       DB_USER:     user
       DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
       APP_PORT:    8083
+      BACKEND_URL: https://${DOMAIN}/api
     expose:
       - "8083"
+    volumes:
+      - ./Services/User_Service/static/avatars:/app/static/avatars
     depends_on:
       user-db:
         condition: service_healthy
@@ -118,6 +125,7 @@ services:
       - sozvon-net
 
   chat-service:
+    image: daaanced/sozvon:chat-latest
     build:
       context: ./Services/Chat_Service
       dockerfile: Dockerfile
@@ -130,8 +138,12 @@ services:
       DB_USER:     user
       DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
       APP_PORT:    8084
+      JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
+      MEDIA_BASE_URL: https://${DOMAIN}/api
     expose:
       - "8084"
+    volumes:
+      - ./Services/Chat_Service/Media:/app/Media
     depends_on:
       chat-db:
         condition: service_healthy
@@ -139,6 +151,7 @@ services:
       - sozvon-net
 
   auth-service:
+    image: daaanced/sozvon:auth-latest
     build:
       context: ./Services/Auth_Service
       dockerfile: Dockerfile
@@ -150,7 +163,7 @@ services:
       DB_NAME:     authdb
       DB_USER:     user
       DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
-      JWT_SECRET:  ${JWT_SECRET:-changeme}
+      JWT_SECRET_KEY:  ${JWT_SECRET:-changeme}
       APP_PORT:    8082
     expose:
       - "8082"
@@ -159,8 +172,9 @@ services:
         condition: service_healthy
     networks:
       - sozvon-net
-      
+
   gateway:
+    image: daaanced/sozvon:gateway-latest
     build:
       context: ./Gateway
       dockerfile: Dockerfile
@@ -173,21 +187,24 @@ services:
       USER_SERVICE_URL:  "http://user-service:8083"
       CHAT_SERVICE_URL:  "http://chat-service:8084"
       VOICE_SERVICE_URL: "http://voice-service:8085"
-      JWT_SECRET_KEY:    ${JWT_SECRET}
+      JWT_SECRET_KEY:    ${JWT_SECRET:-changeme}
     networks:
       - sozvon-net
 
   nginx:
+    image: daaanced/sozvon:nginx-latest
     build:
       context: ./nginx
       dockerfile: Dockerfile.nginx
     container_name: nginx
     restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /root/Sozvon/nginx/nginx-certs:/etc/nginx/certs:ro
+      - ./nginx/nginx-certs:/etc/nginx/certs:ro
     depends_on:
       - gateway
       - client
@@ -201,55 +218,18 @@ services:
   # ════════════════════════════════════════════════════════════════════════════
   # React-клиент (production build)
   # ════════════════════════════════════════════════════════════════════════════
-  
+
   client:
+    image: daaanced/sozvon:client-latest
     build:
       context: ./sozvon-client
       dockerfile: Dockerfile
-    args:
-      VITE_API_URL: https://zvonya.ru/api
-      VITE_WS_URL: wss://zvonya.ru/ws
+      args:
+        VITE_API_URL: https://${DOMAIN}/api
+        VITE_WS_URL: wss://${DOMAIN}/ws
     container_name: sozvon-client
     restart: unless-stopped
     expose:
       - "3000"
     networks:
       - sozvon-net
-
-  #backup:
-  #  image: postgres:18.4-alpine
-  #  container_name: backup
-  #  restart: unless-stopped
-  #  environment:
-  #    AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-secret}
-  #    USER_DB_PASSWORD: ${USER_DB_PASSWORD:-secret}
-  #    CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD:-secret}
-  #  volumes:
-  #    - ./backups:/backup
-  #  command: |
-  #    sh -c '
-  #      while true; do
-  #        PGPASSWORD=$AUTH_DB_PASSWORD pg_dump -h db-auth -U auth_user -d authdb -a --inserts \
-  #          | grep -v "\\restrict" \
-  #          | grep -v "\\unrestrict" \
-  #          > /backup/authdb_$(date +%Y%m%d_%H%M%S).sql
-  
-  #        PGPASSWORD=$USER_DB_PASSWORD pg_dump -h db-user -U user_user -d userdb -a --inserts \
-  #          | grep -v "\\restrict" \
-  #          | grep -v "\\unrestrict" \
-  #          > /backup/userdb_$(date +%Y%m%d_%H%M%S).sql
-
-  #        PGPASSWORD=$CHAT_DB_PASSWORD pg_dump -h db-chat -U chat_user -d chatdb -a --inserts \
-  #          | grep -v "\\restrict" \
-  #          | grep -v "\\unrestrict" \
-  #          > /backup/chatdb_$(date +%Y%m%d_%H%M%S).sql
-
-  #        sleep 21600
-  #      done
-  #    '
-  #  depends_on:
-  #    - db-auth
-  #    - db-user
-  #    - db-chat
-  #  networks:
-  #    - sozvon-net

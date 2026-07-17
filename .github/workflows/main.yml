@@ -1,0 +1,128 @@
+# Sozvon\.github\workflows\main.yml
+
+name: CI/CD — Sozvon
+
+on:
+  push:
+    branches: [ master ]
+
+env:
+  REGISTRY_IMAGE: daaanced/sozvon
+
+jobs:
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Сборка и пуш Go-сервисов + nginx (без build-args)
+  # ════════════════════════════════════════════════════════════════════════════
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: voice
+            context: ./Services/Voice_Service
+            dockerfile: ./Services/Voice_Service/Dockerfile
+          - name: user
+            context: ./Services/User_Service
+            dockerfile: ./Services/User_Service/Dockerfile
+          - name: chat
+            context: ./Services/Chat_Service
+            dockerfile: ./Services/Chat_Service/Dockerfile
+          - name: auth
+            context: ./Services/Auth_Service
+            dockerfile: ./Services/Auth_Service/Dockerfile
+          - name: gateway
+            context: ./Gateway
+            dockerfile: ./Gateway/Dockerfile
+          - name: nginx
+            context: ./nginx
+            dockerfile: ./nginx/Dockerfile.nginx
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (${{ matrix.name }})
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}:${{ matrix.name }}-latest
+            ${{ env.REGISTRY_IMAGE }}:${{ matrix.name }}-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Сборка клиента отдельно — нужны build-args с DOMAIN
+  # ════════════════════════════════════════════════════════════════════════════
+  build-client:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (client)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./sozvon-client
+          file: ./sozvon-client/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=https://${{ secrets.DOMAIN }}/api
+            VITE_WS_URL=wss://${{ secrets.DOMAIN }}/ws
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}:client-latest
+            ${{ env.REGISTRY_IMAGE }}:client-${{ github.sha }}
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,mode=max,scope=client
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # Деплой на VPS
+  # ════════════════════════════════════════════════════════════════════════════
+  deploy:
+    needs: [ build, build-client ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.prod.yml to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/root/Sozvon"
+          strip_components: 0
+
+      - name: Pull images & restart containers
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /root/Sozvon
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f

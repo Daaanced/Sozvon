@@ -1,4 +1,4 @@
-# Sozvon\nginx\nginx.conf
+# Sozvon\nginx\nginx.conf.template
 
 user nginx;
 worker_processes auto;
@@ -20,8 +20,14 @@ http {
     }
 
 server {
+    listen 80;
+    server_name ${DOMAIN} www.${DOMAIN};
+    return 301 https://$host$request_uri;
+}
+
+server {
     listen 443 ssl;
-    server_name zvonya.ru www.zvonya.ru;
+    server_name ${DOMAIN} www.${DOMAIN};
 
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
