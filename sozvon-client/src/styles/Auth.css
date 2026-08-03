@@ -1,0 +1,92 @@
+/* sozvon-client\src\styles\Auth.css */
+
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+
+  background: #f2f2f2;
+}
+
+.auth-card {
+  width: 360px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  padding: 32px;
+
+  background: #ffffff;
+
+  border: 1px solid #bfbfbf;
+  border-radius: 10px;
+
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.auth-card h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.auth-input {
+  padding: 12px;
+
+  font-size: 16px;
+
+  border: 1px solid #bdbdbd;
+  border-radius: 6px;
+
+  outline: none;
+}
+
+.auth-input:focus {
+  border-color: #6b6b6b;
+}
+
+.auth-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  margin-top: 8px;
+}
+
+.auth-button {
+  padding: 10px 20px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: #3b82f6;
+  color: white;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.auth-button:hover {
+  background: #2563eb;
+}
+
+.auth-link {
+  color: #555;
+  text-decoration: none;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
+.auth-error {
+  color: #d22;
+  font-size: 14px;
+}
+
+.auth-success {
+  color: #198754;
+  font-size: 14px;
+}

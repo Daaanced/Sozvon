@@ -5,10 +5,12 @@ FROM node:24-alpine AS builder
 # Объявляем аргументы, которые придут из docker-compose
 ARG VITE_API_URL
 ARG VITE_WS_URL
+ARG DOMAIN
 
 # Превращаем их в ENV переменные, чтобы они были доступны Vite во время сборки
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
+ENV DOMAIN=$DOMAIN
 
 WORKDIR /app
 

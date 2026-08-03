@@ -48,8 +48,7 @@ export default function UserSearchResult({
           }}
           onError={(e) => {
             e.currentTarget.onerror = null;
-            e.currentTarget.src =
-              `${API_URL}/static/avatars/default.png;`
+            e.currentTarget.src = `${API_URL}/static/avatars/default.png;`;
           }}
         />
       </div>

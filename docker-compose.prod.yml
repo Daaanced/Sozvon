@@ -225,6 +225,7 @@ services:
       context: ./sozvon-client
       dockerfile: Dockerfile
       args:
+        DOMAIN: ${DOMAIN}
         VITE_API_URL: https://${DOMAIN}/api
         VITE_WS_URL: wss://${DOMAIN}/ws
     container_name: sozvon-client

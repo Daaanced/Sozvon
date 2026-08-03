@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { register as registerRequest } from "../api/auth";
+import "../styles/Auth.css";
 
 export default function Register() {
   const [login, setLogin] = useState("");
@@ -29,28 +30,38 @@ export default function Register() {
   }
 
   return (
-    <div>
-      <h2>Register</h2>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h2>Registration</h2>
 
-      <input
-        placeholder="Login"
-        value={login}
-        onChange={(e) => setLogin(e.target.value)}
-      />
+        <input
+          className="auth-input"
+          placeholder="Login"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+        />
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+        <input
+          className="auth-input"
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-      <button onClick={handleRegister}>Register</button>
+        {message && <div className="auth-success">{message}</div>}
+        {error && <div className="auth-error">{error}</div>}
 
-      {message && <p style={{ color: "green" }}>{message}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+        <div className="auth-actions">
+          <Link className="auth-link" to="/login">
+            Back to login
+          </Link>
 
-      <Link to="/login">Back to login</Link>
+          <button className="auth-button" onClick={handleRegister}>
+            Register
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

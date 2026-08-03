@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login as loginRequest } from "../api/auth";
+import "../styles/Auth.css";
 
 export default function Login() {
   const [login, setLogin] = useState("");
@@ -20,27 +21,37 @@ export default function Login() {
   }
 
   return (
-    <div>
-      <h2>Login</h2>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h2>Login</h2>
 
-      <input
-        placeholder="Login"
-        value={login}
-        onChange={(e) => setLogin(e.target.value)}
-      />
+        <input
+          className="auth-input"
+          placeholder="Login"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+        />
 
-      <input
-        placeholder="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+        <input
+          className="auth-input"
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-      <button onClick={handleLogin}>Login</button>
+        {error && <div className="auth-error">{error}</div>}
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+        <div className="auth-actions">
+          <Link className="auth-link" to="/register">
+            Register
+          </Link>
 
-      <Link to="/register">Register</Link>
+          <button className="auth-button" onClick={handleLogin}>
+            Login
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
