@@ -1,7 +1,7 @@
 # Sozvon\nginx\Dockerfile.nginx
 
 # Gateway — nginx reverse proxy
-FROM nginx:1.27-alpine
+FROM nginx:1.31.3-alpine
 
 RUN apk add --no-cache gettext
 

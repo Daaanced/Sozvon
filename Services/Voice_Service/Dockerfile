@@ -1,7 +1,7 @@
 # Sozvon\Services\Voice_Service\Dockerfile
 
 # ─── Stage 1: build ───────────────────────────────────────────────────────────
-FROM golang:1.26.4-alpine AS builder
+FROM golang:1.26.5-alpine AS builder
 
 # Нужны git + ca-certificates для go mod download
 RUN apk add --no-cache git ca-certificates tzdata

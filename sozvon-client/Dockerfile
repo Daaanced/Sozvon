@@ -1,6 +1,6 @@
 # Sozvon/sozvon-client/Dockerfile
 # ─── Stage 1: build React ─────────────────────────────────────────────────────
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 # Объявляем аргументы, которые придут из docker-compose
 ARG VITE_API_URL
