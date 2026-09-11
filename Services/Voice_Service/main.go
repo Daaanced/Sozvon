@@ -45,13 +45,6 @@ func main() {
 		w.Write([]byte(`{"status":"ok","service":"voice"}`))
 	}).Methods("GET")
 
-	// c := cors.New(cors.Options{
-	// 	AllowedOrigins:   []string{"*"},
-	// 	AllowCredentials: true,
-	// 	AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
-	// 	AllowedHeaders:   []string{"*"},
-	// })
-
 	srv := &http.Server{
 		Addr:         cfg.Address,
 		Handler:      r,

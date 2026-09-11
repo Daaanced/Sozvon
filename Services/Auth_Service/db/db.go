@@ -1,4 +1,4 @@
-// Auth_Service/db/db.go - ОБНОВЛЕННАЯ ВЕРСИЯ
+// Auth_Service/db/db.go
 package db
 
 import (
