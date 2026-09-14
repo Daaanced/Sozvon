@@ -21,7 +21,7 @@
              │                                     │
           React UI                            API layer
              │                                     │
-    ┌────────┼──────────┐                 ┌─────────┴────────┐
+    ┌────────┼──────────┐                 ┌────────┴─────────┐
     │        │          │                 │                  │
   Pages  Components  Context             HTTP            WebSocket
     │        │          │                 │                  │
@@ -53,12 +53,12 @@
               ▼                  ▼                  ▼
            Gateway            Gateway          Voice Service
               │                  │                  │
-       ┌─────┼─────┐       ┌─────┴─────┐            │
-       │     │     │       │           │            │
-      Auth  User  Chat    Chat       Voice        UDP/RTP
-       │     │     │     Service    Service          │
-       ▼     ▼     ▼       │           │             ▼
-      auth profile     messages    signaling        audio
+       ┌──────┼─────┐       ┌────┴──────┐           │
+       │      │     │       │           │           │
+      Auth   User  Chat    Chat       Voice       UDP/RTP
+       │      │     │     Service    Service        │
+       ▼      ▼     ▼       │           │           ▼
+      auth profile  messages        signaling      audio
 ```
 
 **Главная идея:** React отвечает за интерфейс и состояние, REST — за CRUD-операции, единый WebSocket — за real-time события, WebRTC — за передачу голосового медиапотока.
@@ -407,7 +407,7 @@ getUnreadMessages()
              │             ▼
              │          Gateway
              │             │
-             └─────────────┘
+             └─────────────┤
                            │
                            ▼
                         Client

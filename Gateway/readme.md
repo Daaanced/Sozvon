@@ -6,23 +6,21 @@ Gateway
 
 Упрощенно:
 
-                        ┌─────────────────┐
-                        │     Client      │
-                        └────────┬────────┘
-                                 │
-                         HTTPS / WebSocket
-                                 │
-                                 ▼
-                       ┌──────────────────┐
-                       │     Gateway      │
-                       └────────┬─────────┘
-                                │
-              ┌─────────────────┼─────────────────┐
-              ▼                 ▼                 ▼
-        Auth Service       User Service      Chat Service
-                                                  │
-                                                  ▼
-                                           Voice Service
+								┌─────────────────┐
+								│     Client      │
+								└────────┬────────┘
+										 │
+								  HTTPS / WebSocket
+										 │
+										 ▼
+								┌──────────────────┐
+								│     Gateway      │
+								└────────┬─────────┘
+										 │
+              ┌─────────────────┬────────┴────────┬─────────────────┐             
+              ▼                 ▼                 ▼                 ▼
+        Auth Service       User Service      Chat Service      Voice Service
+                                             
 
 # Основная функциональность
 Единая точка входа
@@ -460,36 +458,33 @@ Gateway выполняет:
 
 В контексте всего Sozvon его роль можно представить так:
 
-                         ┌──────────────┐
-                         │    Client    │
-                         └──────┬───────┘
-                                │
-                         HTTPS / WSS
-                                │
-                                ▼
-                    ┌──────────────────────┐
-                    │       Gateway        │
-                    │                      │
-                    │  CORS                │
-                    │  JWT validation      │
-                    │  HTTP routing        │
-                    │  WS routing          │
-                    │  Logging             │
-                    │  Recovery            │
-                    └───────┬──────────────┘
-                            │
-          ┌─────────────────┼────────────────────┐
-          │                 │                    │
-          ▼                 ▼                    ▼
-    Auth Service       User Service         Chat Service
-                                                 │
-                                                 │ WS
-                                                 ▼
-                                            Voice Service
-                                                 │
-                                                 │ WebRTC
-                                                 ▼
-                                              UDP/RTP
+							   ┌──────────────┐
+							   │    Client    │
+							   └──────┬───────┘
+									  │
+							     HTTPS / WSS
+									  │
+									  ▼
+							  ┌─────────────────┐
+							  │     Gateway     │
+						      │                 │
+							  │  CORS           │
+							  │  JWT validation │
+							  │  HTTP routing   │
+							  │  WS routing     │
+						   	  │  Logging        │
+							  │  Recovery       │
+							  └───────┬─────────┘
+									  │
+          ┌─────────────────┬─────────┴──────────┬────────────────────┐ 
+          │                 │                    │					  │ WS
+          ▼                 ▼                    ▼					  ▼
+    Auth Service       User Service         Chat Service		Voice Service
+                                                 					  │
+                                                 					  │ WebRTC
+                                                 					  ▼
+                                            					   UDP/RTP
+
 # Главное назначение
 
 Gateway выполняет четыре основные функции:

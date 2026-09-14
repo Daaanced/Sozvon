@@ -215,7 +215,6 @@ updated_at
 
 ```
 Development → Docker Compose → Production
-
 ```
 
 ---
